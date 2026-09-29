@@ -12,8 +12,10 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -52,6 +54,12 @@ public class FishHelperClient implements ClientModInitializer {
 
     private static boolean enabled = false;
     private static boolean paused = false;
+    private static boolean pausedBeforeHoppityCall = false;
+    private static boolean hoppityAwaitingYes = false;
+    private static boolean hoppityAwaitingWindow = false;
+    private static boolean hoppityWindowDetected = false;
+    private static Screen hoppityScreenBeforeAccept;
+    private static int hoppityPauseTicks = 0;
     private static boolean biteAlertHandled = false;
     private static boolean bobberTrackingInitialized = false;
     private static boolean bobberWasActive = false;
@@ -67,7 +75,7 @@ public class FishHelperClient implements ClientModInitializer {
     private static int handledMagmaCubeId = -1;
     private static InteractionHand rodHandForAction;
     private static int rodSelectedSlotForAction = -1;
-    private static int hyperionSlotForAction = -1;
+    private static int actionWeaponSlotForAction = -1;
     private static UUID trackedHotspotUuid;
     private static ClientLevel trackedHotspotLevel;
     private static ClientLevel observedWorldLevel;
@@ -130,8 +138,31 @@ public class FishHelperClient implements ClientModInitializer {
         });
 
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+            Minecraft client = Minecraft.getInstance();
+            String plainMessage = message.getString().replaceAll("(?i)§[0-9A-FK-OR]", "").strip();
+
+            if (enabled && client.player != null) {
+                if (!hoppityAwaitingYes && !hoppityAwaitingWindow
+                        && isHoppityRingMessage(plainMessage)) {
+                    String pickupCommand = findClickableCommand(message, "PICK UP");
+                    if (pickupCommand != null) {
+                        beginHoppityCall(client, pickupCommand);
+                    }
+                } else if (hoppityAwaitingYes && isHoppityYesPrompt(plainMessage)) {
+                    String yesCommand = findClickableCommand(message, "[Yes]");
+                    if (yesCommand != null) {
+                        hoppityScreenBeforeAccept = client.screen;
+                        sendChatClickCommand(client.player, yesCommand);
+                        hoppityAwaitingYes = false;
+                        hoppityAwaitingWindow = true;
+                        client.player.sendSystemMessage(Component.literal(
+                                STATUS_PREFIX + " §eHoppity offer accepted; checking the window"));
+                    }
+                }
+            }
+
             if (enabled && !paused && STOP_MESSAGES.contains(message.getString().strip())) {
-                switchToHyperionForRareCreature(Minecraft.getInstance().player);
+                switchToActionWeaponForRareCreature(client.player);
             }
         });
 
@@ -178,7 +209,7 @@ public class FishHelperClient implements ClientModInitializer {
                 handledMagmaCubeId = -1;
                 rodHandForAction = null;
                 rodSelectedSlotForAction = -1;
-                hyperionSlotForAction = -1;
+                actionWeaponSlotForAction = -1;
                 recastCheckTimer = 8 * 20;
                 flarePlacementCooldown = 0;
                 sosFlarePending = false;
@@ -194,9 +225,73 @@ public class FishHelperClient implements ClientModInitializer {
                 openConfigMenu();
             }
 
+            if (hoppityAwaitingWindow
+                    && client.screen != hoppityScreenBeforeAccept
+                    && client.screen instanceof AbstractContainerScreen<?> screen
+                    && isHoppityOfferScreen(screen, client)) {
+                hoppityAwaitingWindow = false;
+                hoppityWindowDetected = true;
+                if (client.player != null) {
+                    boolean validOffer = screen.getMenu().slots.size() > 22
+                            && isHoppityOfferTooltip(screen.getMenu().slots.get(22).getItem(), client);
+                    boolean alreadyOwned = validOffer && isHoppityRabbitAlreadyOwned(screen, client);
+                    String ownership = alreadyOwned
+                            ? "§eRabbit already found; no purchase made"
+                            : validOffer ? "§eRabbit not found yet" : "§eCould not verify the rabbit offer";
+                    client.player.sendSystemMessage(Component.literal(
+                            STATUS_PREFIX + " §aHoppity window opened. " + ownership));
+
+                    if (Config.INSTANCE.autoBuyHoppityRabbit && validOffer) {
+                        if (alreadyOwned) {
+                            client.setScreen(null);
+                        } else if (client.gameMode != null) {
+                            client.gameMode.handleContainerInput(
+                                    screen.getMenu().containerId,
+                                    22,
+                                    0,
+                                    ContainerInput.PICKUP,
+                                    client.player
+                            );
+                            client.player.sendSystemMessage(Component.literal(
+                                    STATUS_PREFIX + " §eAuto-buy clicked for the unowned rabbit"));
+                        }
+                    }
+                }
+            }
+
+            if (hoppityWindowDetected) {
+                if (client.screen instanceof AbstractContainerScreen<?>) {
+                    return;
+                }
+                hoppityWindowDetected = false;
+                hoppityAwaitingYes = false;
+                hoppityAwaitingWindow = false;
+                hoppityPauseTicks = 20;
+            }
+
+            if (hoppityPauseTicks > 0) {
+                if (--hoppityPauseTicks <= 0) {
+                    hoppityPauseTicks = 0;
+                    paused = pausedBeforeHoppityCall;
+                    hoppityAwaitingYes = false;
+                    hoppityAwaitingWindow = false;
+                    if (!paused) {
+                        biteAlertHandled = false;
+                        bobberTrackingInitialized = false;
+                    }
+                }
+                return;
+            }
+
             if (!enabled || paused || client.player == null || client.level == null || client.gameMode == null) {
                 return;
             }
+
+            // Do not let a timed-out call action cause fishing inputs while its offer menu is open.
+            if (hoppityWindowDetected && client.screen instanceof AbstractContainerScreen<?>) {
+                return;
+            }
+            hoppityWindowDetected = false;
 
             var player = client.player;
             if (pendingHotspotUnloadUuid != null) {
@@ -277,21 +372,21 @@ public class FishHelperClient implements ClientModInitializer {
                 InteractionHand heldRodHand = player.getMainHandItem().is(Items.FISHING_ROD)
                         ? InteractionHand.MAIN_HAND
                         : player.getOffhandItem().is(Items.FISHING_ROD) ? InteractionHand.OFF_HAND : null;
-                int hypSlot = Config.INSTANCE.useHyperion ? findHyperionHotbarSlot(player) : -1;
+                int hypSlot = findActionWeaponHotbarSlot(player);
                 if (heldRodHand != null && hypSlot >= 0) {
                     rodHandForAction = heldRodHand;
                     rodSelectedSlotForAction = player.getInventory().getSelectedSlot();
-                    hyperionSlotForAction = hypSlot;
+                    actionWeaponSlotForAction = hypSlot;
                     fishingAction = 7;
                     actionTimer = 4; // the action timer is decremented later in this same tick
-                } else if (Config.INSTANCE.useHyperion) {
+                } else if (Config.INSTANCE.actionWeapon != Config.ActionWeapon.NONE) {
                     player.sendSystemMessage(Component.literal(
-                            STATUS_PREFIX + " magma-cube recovery skipped (rod or Hyperion not found)"));
+                            STATUS_PREFIX + " magma-cube recovery skipped (rod or selected action weapon not found)"));
                 }
             }
 
             // Finish an active bite sequence before checking the currently held item.
-            // During this sequence the main hand intentionally holds the Hyperion.
+            // During this sequence the main hand intentionally holds the selected action weapon.
             if (fishingAction >= 0) {
                 if (actionTimer > 0) {
                     actionTimer--;
@@ -304,12 +399,12 @@ public class FishHelperClient implements ClientModInitializer {
                     client.gameMode.useItem(player, rodHandForAction);
                     player.swing(rodHandForAction);
 
-                    fishingAction = hyperionSlotForAction >= 0 ? 1 : 3;
-                    actionTimer = hyperionSlotForAction >= 0
+                    fishingAction = actionWeaponSlotForAction >= 0 ? 1 : 3;
+                    actionTimer = actionWeaponSlotForAction >= 0
                             ? randomSwapDelayTicks()
                             : ThreadLocalRandom.current().nextInt(4, 6);
                 } else if (fishingAction == 1) {
-                    player.getInventory().setSelectedSlot(hyperionSlotForAction);
+                    player.getInventory().setSelectedSlot(actionWeaponSlotForAction);
                     fishingAction = 4;
                     actionTimer = randomSwapDelayTicks();
                 } else if (fishingAction == 4) {
@@ -349,7 +444,7 @@ public class FishHelperClient implements ClientModInitializer {
                     if (activeBobber == null || !(activeBobber.getHookedIn() instanceof MagmaCube)) {
                         finishFishingAction();
                     } else {
-                        player.getInventory().setSelectedSlot(hyperionSlotForAction);
+                        player.getInventory().setSelectedSlot(actionWeaponSlotForAction);
                         fishingAction = 8;
                         actionTimer = randomSwapDelayTicks();
                     }
@@ -365,14 +460,14 @@ public class FishHelperClient implements ClientModInitializer {
                     fishingAction = 10;
                     actionTimer = randomSwapDelayTicks();
                 } else if (fishingAction == 10) {
-                    // Switching to Hyperion removes the old bobber; cast directly again.
+                    // Switching to the action weapon removes the old bobber; cast directly again.
                     client.gameMode.useItem(player, rodHandForAction);
                     player.swing(rodHandForAction);
                     bobberWasActive = true;
                     bobberTrackingInitialized = true;
                     finishFishingAction();
                 } else if (fishingAction == 11) {
-                    player.getInventory().setSelectedSlot(hyperionSlotForAction);
+                    player.getInventory().setSelectedSlot(actionWeaponSlotForAction);
                     fishingAction = 12;
                     actionTimer = randomSwapDelayTicks();
                 } else if (fishingAction == 12) {
@@ -473,14 +568,14 @@ public class FishHelperClient implements ClientModInitializer {
                 biteAlertHandled = true;
                 rodHandForAction = rodHand;
                 rodSelectedSlotForAction = player.getInventory().getSelectedSlot();
-                hyperionSlotForAction = Config.INSTANCE.useHyperion ? findHyperionHotbarSlot(player) : -1;
+                actionWeaponSlotForAction = findActionWeaponHotbarSlot(player);
                 fishingAction = 0;
                 actionTimer = 1;
                 return;
             }
 
-            // Wait until the current rod/Hyperion/pet sequence is finished. A flare is
-            // queued only after a Hyperion use and placed on a later idle tick.
+            // Wait until the current rod/action-weapon/pet sequence is finished. A flare is
+            // queued only after an action-weapon use and placed on a later idle tick.
             if (sosFlarePending && flarePlacementCooldown == 0
                     && Config.INSTANCE.flareTier != Config.FlareTier.NONE
                     && !hasNearbyFlareOrPlasmaflux(client, player)) {
@@ -488,7 +583,7 @@ public class FishHelperClient implements ClientModInitializer {
                 if (flareSlot >= 0) {
                     rodHandForAction = rodHand;
                     rodSelectedSlotForAction = player.getInventory().getSelectedSlot();
-                    hyperionSlotForAction = flareSlot;
+                    actionWeaponSlotForAction = flareSlot;
                     fishingAction = 11;
                     actionTimer = randomSwapDelayTicks();
                     sosFlarePending = false;
@@ -508,19 +603,141 @@ public class FishHelperClient implements ClientModInitializer {
         });
     }
 
-    private static int findHyperionHotbarSlot(LocalPlayer player) {
+    private static int findActionWeaponHotbarSlot(LocalPlayer player) {
+        String search = Config.INSTANCE.actionWeapon.searchName;
+        if (search.isEmpty()) {
+            return -1;
+        }
         for (int slot = 0; slot < 9; slot++) {
             var stack = player.getInventory().getItem(slot);
             if (!stack.isEmpty()) {
                 String name = stack.getHoverName().getString()
                         .replaceAll("(?i)§[0-9A-FK-OR]", "")
                         .toLowerCase(java.util.Locale.ROOT);
-                if (name.contains("hyperion")) {
+                if (name.contains(search)) {
                     return slot;
                 }
             }
         }
         return -1;
+    }
+
+    private static boolean isHoppityRingMessage(String message) {
+        String normalized = message.toUpperCase(java.util.Locale.ROOT);
+        return normalized.contains("RING")
+                && normalized.contains("[PICK UP]")
+                && (message.startsWith("✆") || normalized.contains("HOPPITY"));
+    }
+
+    private static boolean isHoppityYesPrompt(String message) {
+        String normalized = message.toLowerCase(java.util.Locale.ROOT);
+        return normalized.contains("select an option:")
+                && normalized.contains("[yes]")
+                && normalized.contains("[no]");
+    }
+
+    private static String findClickableCommand(Component message, String label) {
+        for (Component part : message.toFlatList()) {
+            if (!part.getString().toLowerCase(java.util.Locale.ROOT)
+                    .contains(label.toLowerCase(java.util.Locale.ROOT))) {
+                continue;
+            }
+            if (part.getStyle().getClickEvent() instanceof ClickEvent.RunCommand runCommand) {
+                return runCommand.command();
+            }
+        }
+        return null;
+    }
+
+    private static boolean isHoppityOfferScreen(AbstractContainerScreen<?> screen, Minecraft client) {
+        String title = screen.getTitle().getString()
+                .replaceAll("(?i)§[0-9A-FK-OR]", "")
+                .toLowerCase(java.util.Locale.ROOT);
+        if (title.contains("hoppity") || title.contains("chocolate rabbit")) {
+            return true;
+        }
+        return screen.getMenu().slots.size() > 22
+                && isHoppityOfferTooltip(screen.getMenu().slots.get(22).getItem(), client);
+    }
+
+    private static boolean isHoppityRabbitAlreadyOwned(AbstractContainerScreen<?> screen, Minecraft client) {
+        LocalPlayer player = client.player;
+        if (player == null || client.level == null) {
+            return false;
+        }
+
+        if (screen.getMenu().slots.size() <= 22) {
+            return false;
+        }
+        String details = getItemTooltipText(screen.getMenu().slots.get(22).getItem(), client, player);
+        return details.contains("already owned") || details.contains("already found")
+                || details.contains("you already have");
+    }
+
+    private static boolean isHoppityOfferTooltip(net.minecraft.world.item.ItemStack stack, Minecraft client) {
+        LocalPlayer player = client.player;
+        if (player == null || client.level == null) {
+            return false;
+        }
+        String tooltip = getItemTooltipText(stack, client, player);
+        return tooltip.contains("rabbit") && tooltip.contains("cost") && tooltip.contains("click to trade");
+    }
+
+    private static String getItemTooltipText(
+            net.minecraft.world.item.ItemStack stack,
+            Minecraft client,
+            LocalPlayer player
+    ) {
+        if (client.level == null) {
+            return "";
+        }
+        String details = stack.getHoverName().getString() + " " + stack.getComponents();
+        Item.TooltipContext context = Item.TooltipContext.of(client.level);
+        for (TooltipFlag flag : java.util.List.of(TooltipFlag.NORMAL, TooltipFlag.ADVANCED)) {
+            details += " " + stack.getTooltipLines(context, player, flag).stream()
+                    .map(Component::getString)
+                    .collect(java.util.stream.Collectors.joining(" "));
+        }
+        return details.replaceAll("(?i)§[0-9A-FK-OR]", "").toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static void sendChatClickCommand(LocalPlayer player, String command) {
+        String normalizedCommand = command.stripLeading();
+        while (normalizedCommand.startsWith("/")) {
+            normalizedCommand = normalizedCommand.substring(1);
+        }
+        if (!normalizedCommand.isBlank()) {
+            player.connection.sendCommand(normalizedCommand);
+        }
+    }
+
+    private static void beginHoppityCall(Minecraft client, String pickupCommand) {
+        LocalPlayer player = client.player;
+        if (player == null) {
+            return;
+        }
+
+        pausedBeforeHoppityCall = paused;
+        paused = true;
+        hoppityPauseTicks = 10 * 20;
+        hoppityAwaitingYes = true;
+        hoppityAwaitingWindow = false;
+        hoppityWindowDetected = false;
+
+        if (fishingAction >= 0 && rodSelectedSlotForAction >= 0) {
+            player.getInventory().setSelectedSlot(rodSelectedSlotForAction);
+        }
+        fishingAction = -1;
+        actionTimer = 0;
+        petMenuWaitTicks = 0;
+        petMenuStableTicks = 0;
+        rodHandForAction = null;
+        rodSelectedSlotForAction = -1;
+        actionWeaponSlotForAction = -1;
+        handledMagmaCubeId = -1;
+
+        sendChatClickCommand(player, pickupCommand);
+        player.sendSystemMessage(Component.literal(STATUS_PREFIX + " §eHoppity call picked up; fishing paused for 10 seconds"));
     }
 
     private static int findFlareHotbarSlot(LocalPlayer player) {
@@ -581,7 +798,7 @@ public class FishHelperClient implements ClientModInitializer {
         petMenuWaitTicks = 0;
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
-        hyperionSlotForAction = -1;
+        actionWeaponSlotForAction = -1;
         sosFlarePending = false;
     }
 
@@ -671,13 +888,13 @@ public class FishHelperClient implements ClientModInitializer {
         return ThreadLocalRandom.current().nextInt(1, 4);
     }
 
-    private static void switchToHyperionForRareCreature(LocalPlayer player) {
-        if (player == null || !Config.INSTANCE.useHyperion) {
+    private static void switchToActionWeaponForRareCreature(LocalPlayer player) {
+        if (player == null || Config.INSTANCE.actionWeapon == Config.ActionWeapon.NONE) {
             return;
         }
-        int hyperionSlot = findHyperionHotbarSlot(player);
-        if (hyperionSlot >= 0) {
-            player.getInventory().setSelectedSlot(hyperionSlot);
+        int weaponSlot = findActionWeaponHotbarSlot(player);
+        if (weaponSlot >= 0) {
+            player.getInventory().setSelectedSlot(weaponSlot);
         }
     }
 
@@ -743,7 +960,7 @@ public class FishHelperClient implements ClientModInitializer {
         handledMagmaCubeId = -1;
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
-        hyperionSlotForAction = -1;
+        actionWeaponSlotForAction = -1;
         sosFlarePending = false;
         clearTrackedHotspot();
         hotspotRadarStage = 0;
@@ -792,7 +1009,7 @@ public class FishHelperClient implements ClientModInitializer {
         handledMagmaCubeId = -1;
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
-        hyperionSlotForAction = -1;
+        actionWeaponSlotForAction = -1;
         sosFlarePending = false;
         pendingHotspotUnloadUuid = null;
         pendingHotspotUnloadTicks = 0;
@@ -873,7 +1090,7 @@ public class FishHelperClient implements ClientModInitializer {
         petMenuStableTicks = 0;
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
-        hyperionSlotForAction = -1;
+        actionWeaponSlotForAction = -1;
         recastCheckTimer = 8 * 20;
     }
 }

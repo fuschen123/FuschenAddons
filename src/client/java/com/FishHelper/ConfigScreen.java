@@ -15,11 +15,14 @@ public class ConfigScreen extends Screen {
 
     private Button keyButton;
     private Button hyperionButton;
+    private Button soulWhipButton;
+    private Button flamingFlayButton;
     private Button flareButton;
     private Button petButton;
     private Button slugfishButton;
     private Button reelInButton;
     private Button grinchClickerButton;
+    private Button hoppityAutoBuyButton;
     private EditBox pingField;
     private EditBox grinchCpsField;
     private boolean listeningForKey = false;
@@ -33,10 +36,10 @@ public class ConfigScreen extends Screen {
     @Override
     protected void init() {
         int centerX = this.width / 2;
-        int startY = this.height / 2 - 105;
         int buttonWidth = 200;
         int buttonHeight = 20;
-        int spacing = 23;
+        int spacing = 21;
+        int startY = getStartY();
 
         keyButton = Button.builder(getKeyLabel(), btn -> {
                     listeningForKey = true;
@@ -46,21 +49,42 @@ public class ConfigScreen extends Screen {
                 .build();
         addRenderableWidget(keyButton);
 
-        hyperionButton = Button.builder(getHyperionLabel(), btn -> {
-                    Config.INSTANCE.useHyperion = !Config.INSTANCE.useHyperion;
-                    Config.save();
-                    hyperionButton.setMessage(getHyperionLabel());
+        hyperionButton = Button.builder(getActionWeaponLabel(Config.ActionWeapon.HYPERION), btn -> {
+                    toggleActionWeapon(Config.ActionWeapon.HYPERION);
+                    hyperionButton.setMessage(getActionWeaponLabel(Config.ActionWeapon.HYPERION));
+                    soulWhipButton.setMessage(getActionWeaponLabel(Config.ActionWeapon.SOUL_WHIP));
+                    flamingFlayButton.setMessage(getActionWeaponLabel(Config.ActionWeapon.FLAMING_FLAY));
                 })
                 .bounds(centerX - buttonWidth / 2, startY + spacing, buttonWidth, buttonHeight)
                 .build();
         addRenderableWidget(hyperionButton);
+
+        soulWhipButton = Button.builder(getActionWeaponLabel(Config.ActionWeapon.SOUL_WHIP), btn -> {
+                    toggleActionWeapon(Config.ActionWeapon.SOUL_WHIP);
+                    hyperionButton.setMessage(getActionWeaponLabel(Config.ActionWeapon.HYPERION));
+                    soulWhipButton.setMessage(getActionWeaponLabel(Config.ActionWeapon.SOUL_WHIP));
+                    flamingFlayButton.setMessage(getActionWeaponLabel(Config.ActionWeapon.FLAMING_FLAY));
+                })
+                .bounds(centerX - buttonWidth / 2, startY + spacing * 2, buttonWidth, buttonHeight)
+                .build();
+        addRenderableWidget(soulWhipButton);
+
+        flamingFlayButton = Button.builder(getActionWeaponLabel(Config.ActionWeapon.FLAMING_FLAY), btn -> {
+                    toggleActionWeapon(Config.ActionWeapon.FLAMING_FLAY);
+                    hyperionButton.setMessage(getActionWeaponLabel(Config.ActionWeapon.HYPERION));
+                    soulWhipButton.setMessage(getActionWeaponLabel(Config.ActionWeapon.SOUL_WHIP));
+                    flamingFlayButton.setMessage(getActionWeaponLabel(Config.ActionWeapon.FLAMING_FLAY));
+                })
+                .bounds(centerX - buttonWidth / 2, startY + spacing * 3, buttonWidth, buttonHeight)
+                .build();
+        addRenderableWidget(flamingFlayButton);
 
         flareButton = Button.builder(getFlareLabel(), btn -> {
                     Config.INSTANCE.flareTier = Config.INSTANCE.flareTier.next();
                     Config.save();
                     flareButton.setMessage(getFlareLabel());
                 })
-                .bounds(centerX - buttonWidth / 2, startY + spacing * 2, buttonWidth, buttonHeight)
+                .bounds(centerX - buttonWidth / 2, startY + spacing * 4, buttonWidth, buttonHeight)
                 .build();
         addRenderableWidget(flareButton);
 
@@ -69,7 +93,7 @@ public class ConfigScreen extends Screen {
                     Config.save();
                     petButton.setMessage(getPetLabel());
                 })
-                .bounds(centerX - buttonWidth / 2, startY + spacing * 3, buttonWidth, buttonHeight)
+                .bounds(centerX - buttonWidth / 2, startY + spacing * 5, buttonWidth, buttonHeight)
                 .build();
         addRenderableWidget(petButton);
 
@@ -78,7 +102,7 @@ public class ConfigScreen extends Screen {
                     Config.save();
                     slugfishButton.setMessage(getSlugfishLabel());
                 })
-                .bounds(centerX - buttonWidth / 2, startY + spacing * 4, buttonWidth, buttonHeight)
+                .bounds(centerX - buttonWidth / 2, startY + spacing * 6, buttonWidth, buttonHeight)
                 .build();
         addRenderableWidget(slugfishButton);
 
@@ -87,11 +111,11 @@ public class ConfigScreen extends Screen {
                     Config.save();
                     reelInButton.setMessage(getReelInLabel());
                 })
-                .bounds(centerX - buttonWidth / 2, startY + spacing * 5, buttonWidth, buttonHeight)
+                .bounds(centerX - buttonWidth / 2, startY + spacing * 7, buttonWidth, buttonHeight)
                 .build();
         addRenderableWidget(reelInButton);
 
-        pingField = new EditBox(this.font, centerX - 5, startY + spacing * 6, 65, buttonHeight,
+        pingField = new EditBox(this.font, centerX - 5, startY + spacing * 8, 65, buttonHeight,
                 Component.literal("Ping (ms)"));
         pingField.setMaxLength(4);
         pingField.setValue(Integer.toString(Config.INSTANCE.reelPingMs));
@@ -104,17 +128,26 @@ public class ConfigScreen extends Screen {
                     Config.save();
                     grinchClickerButton.setMessage(getGrinchClickerLabel());
                 })
-                .bounds(centerX - buttonWidth / 2, startY + spacing * 7, buttonWidth, buttonHeight)
+                .bounds(centerX - buttonWidth / 2, startY + spacing * 9, buttonWidth, buttonHeight)
                 .build();
         addRenderableWidget(grinchClickerButton);
 
-        grinchCpsField = new EditBox(this.font, centerX - 5, startY + spacing * 8, 65, buttonHeight,
+        grinchCpsField = new EditBox(this.font, centerX - 5, startY + spacing * 10, 65, buttonHeight,
                 Component.literal("Grinch CPS"));
         grinchCpsField.setMaxLength(5);
         grinchCpsField.setValue(Double.toString(Config.INSTANCE.grinchClickCps));
         grinchCpsField.setResponder(this::updateGrinchCps);
         grinchCpsField.setHint(Component.literal("3–15"));
         addRenderableWidget(grinchCpsField);
+
+        hoppityAutoBuyButton = Button.builder(getHoppityAutoBuyLabel(), btn -> {
+                    Config.INSTANCE.autoBuyHoppityRabbit = !Config.INSTANCE.autoBuyHoppityRabbit;
+                    Config.save();
+                    hoppityAutoBuyButton.setMessage(getHoppityAutoBuyLabel());
+                })
+                .bounds(centerX - buttonWidth / 2, startY + spacing * 11, buttonWidth, buttonHeight)
+                .build();
+        addRenderableWidget(hoppityAutoBuyButton);
 
         addRenderableWidget(Button.builder(Component.literal("Done"), btn -> {
                     listeningForKey = false;
@@ -124,7 +157,7 @@ public class ConfigScreen extends Screen {
                         this.minecraft.setScreen(parent);
                     }
                 })
-                .bounds(centerX - buttonWidth / 2, startY + spacing * 9, buttonWidth, buttonHeight)
+                .bounds(centerX - buttonWidth / 2, startY + spacing * 12, buttonWidth, buttonHeight)
                 .build());
     }
 
@@ -133,8 +166,22 @@ public class ConfigScreen extends Screen {
         return Component.literal("Start/Stop Key: " + keyName);
     }
 
-    private Component getHyperionLabel() {
-        return Component.literal("Use Hyperion: " + (Config.INSTANCE.useHyperion ? "§aON" : "§cOFF"));
+    private int getStartY() {
+        int spacing = 21;
+        int buttonHeight = 20;
+        int contentHeight = spacing * 12 + buttonHeight;
+        return Math.max(70, (this.height - contentHeight) / 2);
+    }
+
+    private Component getActionWeaponLabel(Config.ActionWeapon weapon) {
+        boolean selected = Config.INSTANCE.actionWeapon == weapon;
+        return Component.literal(weapon.displayName + ": " + (selected ? "§aON" : "§cOFF"));
+    }
+
+    private void toggleActionWeapon(Config.ActionWeapon weapon) {
+        Config.INSTANCE.actionWeapon = Config.INSTANCE.actionWeapon == weapon
+                ? Config.ActionWeapon.NONE : weapon;
+        Config.save();
     }
 
     private Component getFlareLabel() {
@@ -157,6 +204,11 @@ public class ConfigScreen extends Screen {
     private Component getGrinchClickerLabel() {
         return Component.literal("Grinch Auto Clicker: "
                 + (Config.INSTANCE.grinchAutoClickerEnabled ? "§aON" : "§cOFF"));
+    }
+
+    private Component getHoppityAutoBuyLabel() {
+        return Component.literal("Auto-buy Hoppity rabbit: "
+                + (Config.INSTANCE.autoBuyHoppityRabbit ? "§aON" : "§cOFF"));
     }
 
     private void updatePingValue(String value) {
@@ -227,14 +279,14 @@ public class ConfigScreen extends Screen {
                 this.font,
                 Component.literal("Lowest Ping:"),
                 this.width / 2 - 78,
-                this.height / 2 - 105 + 23 * 6 + 6,
+                getStartY() + 21 * 8 + 6,
                 0xFFFFFF
         );
         graphics.text(
                 this.font,
                 Component.literal("Grinch CPS:"),
                 this.width / 2 - 78,
-                this.height / 2 - 105 + 23 * 8 + 6,
+                getStartY() + 21 * 10 + 6,
                 0xFFFFFF
         );
 

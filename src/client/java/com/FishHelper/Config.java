@@ -22,10 +22,13 @@ public class Config {
     /** GLFW key code for the start/stop toggle (default O). */
     public int toggleKeyCode = InputConstants.KEY_O;
 
-    /** Whether to swap to Hyperion on bite / magma-cube recovery / rare creatures. */
-    public boolean useHyperion = true;
+    /** Selects the weapon used for the fishing actions; NONE disables weapon swapping. */
+    public ActionWeapon actionWeapon = ActionWeapon.HYPERION;
 
-    /** Which flare (if any) to place after using Hyperion. */
+    /** Automatically buy Hoppity's offered rabbit when the offer says it has not been found yet. */
+    public boolean autoBuyHoppityRabbit = false;
+
+    /** Which flare (if any) to place after using the selected action weapon. */
     public FlareTier flareTier = FlareTier.SOS;
 
     /** Pet to equip from the Pets menu, numbered from 1 to 7. */
@@ -66,6 +69,26 @@ public class Config {
         }
     }
 
+    public enum ActionWeapon {
+        NONE("Off", ""),
+        HYPERION("Hyperion", "hyperion"),
+        SOUL_WHIP("Soul Whip", "soul whip"),
+        FLAMING_FLAY("Flaming Flay", "flaming flay");
+
+        public final String displayName;
+        public final String searchName;
+
+        ActionWeapon(String displayName, String searchName) {
+            this.displayName = displayName;
+            this.searchName = searchName;
+        }
+
+        public ActionWeapon next() {
+            ActionWeapon[] values = values();
+            return values[(ordinal() + 1) % values.length];
+        }
+    }
+
     public static void load() {
         if (Files.exists(CONFIG_PATH)) {
             try {
@@ -73,10 +96,17 @@ public class Config {
                 Config loaded = GSON.fromJson(json, Config.class);
                 if (loaded != null) {
                     INSTANCE = loaded;
+                    if (INSTANCE.actionWeapon == null) {
+                        INSTANCE.actionWeapon = ActionWeapon.HYPERION;
+                    }
                     INSTANCE.petNumber = Math.max(1, Math.min(7, INSTANCE.petNumber));
                     INSTANCE.reelPingMs = Math.max(0, Math.min(5000, INSTANCE.reelPingMs));
                     INSTANCE.grinchClickCps = Math.max(3.0, Math.min(15.0, INSTANCE.grinchClickCps));
                     JsonObject savedConfig = JsonParser.parseString(json).getAsJsonObject();
+                    if (!savedConfig.has("actionWeapon") && savedConfig.has("useHyperion")) {
+                        INSTANCE.actionWeapon = savedConfig.get("useHyperion").getAsBoolean()
+                                ? ActionWeapon.HYPERION : ActionWeapon.NONE;
+                    }
                     if (!savedConfig.has("slugfishReelEnabled") && savedConfig.has("slugfishReelAtBobberTicks")) {
                         INSTANCE.slugfishReelEnabled = savedConfig.get("slugfishReelAtBobberTicks").getAsInt() > 0;
                     }
