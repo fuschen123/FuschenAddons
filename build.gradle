@@ -15,7 +15,7 @@ loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"modid" {
+		"tsclient" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}
@@ -42,6 +42,12 @@ processResources {
 
 tasks.withType(JavaCompile).configureEach {
 	it.options.release = 25
+}
+
+// The project name already includes the mod version, so omit Gradle's default
+// second version suffix from generated JAR filenames.
+tasks.withType(AbstractArchiveTask).configureEach {
+	archiveVersion.set("")
 }
 
 java {
@@ -79,3 +85,4 @@ publishing {
 		// retrieving dependencies.
 	}
 }
+
