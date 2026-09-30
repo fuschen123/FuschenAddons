@@ -126,15 +126,15 @@ public final class RandomMovementFeature {
 
     private static void disablePauseOnLostFocus(Minecraft client) {
         if (!pauseOnLostFocusOverridden) {
-            pauseOnLostFocusBeforeActivation = client.pauseOnLostFocus;
+            pauseOnLostFocusBeforeActivation = client.options.pauseOnLostFocus;
             pauseOnLostFocusOverridden = true;
         }
-        client.pauseOnLostFocus = false;
+        client.options.pauseOnLostFocus = false;
     }
 
     private static void restorePauseOnLostFocus(Minecraft client) {
         if (pauseOnLostFocusOverridden) {
-            client.pauseOnLostFocus = pauseOnLostFocusBeforeActivation;
+            client.options.pauseOnLostFocus = pauseOnLostFocusBeforeActivation;
             pauseOnLostFocusOverridden = false;
         }
     }

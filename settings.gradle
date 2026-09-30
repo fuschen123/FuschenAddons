@@ -10,5 +10,5 @@ pluginManagement {
 }
 
 // Should match your modid
-rootProject.name = 'FuschenAddons_v0.0.41'
+rootProject.name = 'FuschenAddons_v0.0.42'
 

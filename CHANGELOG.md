@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.42
+
+### Fixed
+
+- Access Minecraft's pause-on-lost-focus setting through `client.options`, matching the 26.1.2 API.
+
 ## 0.0.41
 
 ### Fixed
