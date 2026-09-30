@@ -26,10 +26,10 @@ jobs:
       - name: upload mod jar
         uses: actions/upload-artifact@v7
         with:
-          path: build/libs/FuschenAddons_v0.0.35.jar
+          path: build/libs/FuschenAddons_v0.0.36.jar
           archive: false
       - name: upload sources jar
         uses: actions/upload-artifact@v7
         with:
-          path: build/libs/FuschenAddons_v0.0.35-sources.jar
+          path: build/libs/FuschenAddons_v0.0.36-sources.jar
           archive: false

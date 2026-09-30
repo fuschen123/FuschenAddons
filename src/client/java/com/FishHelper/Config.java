@@ -49,6 +49,9 @@ public class Config {
     /** Automatically left-click a hooked Grinch while it is under the crosshair. */
     public boolean grinchAutoClickerEnabled = true;
 
+    /** Allow the randomly strafing movement macro to be activated by its Controls keybind. */
+    public boolean randomMovementEnabled = false;
+
     public enum FlareTier {
         NONE("None", ""),
         WARNING("Warning Flare", "warning flare"),

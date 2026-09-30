@@ -16,7 +16,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ClickEvent;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ArmorStand;
@@ -26,6 +25,7 @@ import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.TooltipFlag;
+import com.FishHelper.features.RandomMovementFeature;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.Set;
 import java.util.UUID;
@@ -43,10 +43,6 @@ public class FishHelperClient implements ClientModInitializer {
             "You have angered a legendary creature... Lord Jawbus has arrived.",
             "WOAH! A Plhlegblast appeared.",
             "The sky darkens and the air thickens. The end times are upon us: Ragnarok is here."
-    );
-
-    private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
-            Identifier.fromNamespaceAndPath("tsclient", "main")
     );
 
     private static KeyMapping TOGGLE_KEY;
@@ -86,19 +82,18 @@ public class FishHelperClient implements ClientModInitializer {
     private static int hotspotRadarTimer;
     private static int hotspotRadarSlot = -1;
     private static int hotspotRadarRestoreSlot = -1;
-    private static UUID grinchClickTargetUuid;
-    private static long nextGrinchClickAt;
 
     @Override
     public void onInitializeClient() {
         Config.load();
+        RandomMovementFeature.initialize();
 
         TOGGLE_KEY = KeyMappingHelper.registerKeyMapping(
                 new KeyMapping(
                         "key.tsclient.toggle",
                         InputConstants.Type.KEYSYM,
                         Config.INSTANCE.toggleKeyCode,
-                        CATEGORY
+                        KeyCategories.MAIN
                 )
         );
         CONFIG_KEY = KeyMappingHelper.registerKeyMapping(
@@ -106,7 +101,7 @@ public class FishHelperClient implements ClientModInitializer {
                         "key.tsclient.config",
                         InputConstants.Type.KEYSYM,
                         InputConstants.KEY_P,
-                        CATEGORY
+                        KeyCategories.MAIN
                 )
         );
 
@@ -363,7 +358,7 @@ public class FishHelperClient implements ClientModInitializer {
             }
 
             Entity hookedEntity = activeBobber == null ? null : activeBobber.getHookedIn();
-            tickGrinchAutoClicker(client, player, hookedEntity);
+            GrinchAutoClickerFeature.tick(client, player, hookedEntity);
             if (!(hookedEntity instanceof MagmaCube)) {
                 handledMagmaCubeId = -1;
             } else if (fishingAction < 0 && activeBobber != null
@@ -896,52 +891,6 @@ public class FishHelperClient implements ClientModInitializer {
         if (weaponSlot >= 0) {
             player.getInventory().setSelectedSlot(weaponSlot);
         }
-    }
-
-    private static void tickGrinchAutoClicker(Minecraft client, LocalPlayer player, Entity hookedEntity) {
-        if (!Config.INSTANCE.grinchAutoClickerEnabled || !isGrinch(hookedEntity)) {
-            grinchClickTargetUuid = null;
-            nextGrinchClickAt = 0;
-            return;
-        }
-        if (client.crosshairPickEntity != hookedEntity) {
-            grinchClickTargetUuid = null;
-            nextGrinchClickAt = 0;
-            return;
-        }
-        if (client.screen != null || player.isUsingItem() || client.gameMode == null) {
-            return;
-        }
-
-        if (!hookedEntity.getUUID().equals(grinchClickTargetUuid)) {
-            grinchClickTargetUuid = hookedEntity.getUUID();
-            nextGrinchClickAt = 0;
-        }
-
-        long now = System.currentTimeMillis();
-        if (now < nextGrinchClickAt) {
-            return;
-        }
-
-        client.gameMode.attack(player, hookedEntity);
-        player.swing(InteractionHand.MAIN_HAND);
-
-        double cps = Math.max(3.0, Math.min(15.0, Config.INSTANCE.grinchClickCps));
-        double intervalMs = (1000.0 / cps) + ((Math.random() - 0.5) * 60.0);
-        nextGrinchClickAt = now + Math.max(1L, Math.round(intervalMs));
-    }
-
-    private static boolean isGrinch(Entity entity) {
-        if (entity == null || !entity.isAlive()) {
-            return false;
-        }
-        String name = entity.getName().getString();
-        if (entity.getCustomName() != null) {
-            name += " " + entity.getCustomName().getString();
-        }
-        return name.replaceAll("(?i)§[0-9A-FK-OR]", "")
-                .toLowerCase(java.util.Locale.ROOT)
-                .contains("grinch");
     }
 
     private static void stopForHotspotGone(LocalPlayer player) {

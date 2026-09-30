@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.36
+
+### Added
+
+- Add a configurable random movement feature. Enable it in the config and toggle it with the K keybind (rebindable in Controls); it holds S and Shift while randomly strafing with A or D every 3–7 ticks.
+
+### Changed
+
+- Suspend random movement and release its movement keys whenever a screen or menu is open.
+- Extract the Grinch auto-clicker and movement behavior into separate feature classes, with a shared keybinding category.
+
 ## 0.0.35
 
 ### Added

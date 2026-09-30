@@ -23,6 +23,7 @@ public class ConfigScreen extends Screen {
     private Button reelInButton;
     private Button grinchClickerButton;
     private Button hoppityAutoBuyButton;
+    private Button randomMovementButton;
     private EditBox pingField;
     private EditBox grinchCpsField;
     private boolean listeningForKey = false;
@@ -149,6 +150,15 @@ public class ConfigScreen extends Screen {
                 .build();
         addRenderableWidget(hoppityAutoBuyButton);
 
+        randomMovementButton = Button.builder(getRandomMovementLabel(), btn -> {
+                    Config.INSTANCE.randomMovementEnabled = !Config.INSTANCE.randomMovementEnabled;
+                    Config.save();
+                    randomMovementButton.setMessage(getRandomMovementLabel());
+                })
+                .bounds(centerX - buttonWidth / 2, startY + spacing * 12, buttonWidth, buttonHeight)
+                .build();
+        addRenderableWidget(randomMovementButton);
+
         addRenderableWidget(Button.builder(Component.literal("Done"), btn -> {
                     listeningForKey = false;
                     savePingValue();
@@ -157,7 +167,7 @@ public class ConfigScreen extends Screen {
                         this.minecraft.setScreen(parent);
                     }
                 })
-                .bounds(centerX - buttonWidth / 2, startY + spacing * 12, buttonWidth, buttonHeight)
+                .bounds(centerX - buttonWidth / 2, startY + spacing * 13, buttonWidth, buttonHeight)
                 .build());
     }
 
@@ -169,8 +179,8 @@ public class ConfigScreen extends Screen {
     private int getStartY() {
         int spacing = 21;
         int buttonHeight = 20;
-        int contentHeight = spacing * 12 + buttonHeight;
-        return Math.max(70, (this.height - contentHeight) / 2);
+        int contentHeight = spacing * 13 + buttonHeight;
+        return Math.max(45, (this.height - contentHeight) / 2);
     }
 
     private Component getActionWeaponLabel(Config.ActionWeapon weapon) {
@@ -209,6 +219,11 @@ public class ConfigScreen extends Screen {
     private Component getHoppityAutoBuyLabel() {
         return Component.literal("Auto-buy Hoppity rabbit: "
                 + (Config.INSTANCE.autoBuyHoppityRabbit ? "§aON" : "§cOFF"));
+    }
+
+    private Component getRandomMovementLabel() {
+        return Component.literal("Random Movement: "
+                + (Config.INSTANCE.randomMovementEnabled ? "§aON" : "§cOFF"));
     }
 
     private void updatePingValue(String value) {
