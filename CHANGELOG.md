@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.41
+
+### Fixed
+
+- Detect the Water Snake armor-stand head shown in the supplied entity data by its skin texture, in addition to its name.
+
 ## 0.0.40
 
 ### Added
