@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.40
+
+### Added
+
+- Recast the fishing rod when its bobber is hooked to an entity named Water Snake, with a two-tick delay between reeling in and casting again.
+
 ## 0.0.39
 
 ### Changed

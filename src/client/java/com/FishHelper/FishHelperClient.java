@@ -358,6 +358,9 @@ public class FishHelperClient implements ClientModInitializer {
             }
 
             Entity hookedEntity = activeBobber == null ? null : activeBobber.getHookedIn();
+            if (WaterSnakeRecastFeature.tick(client, player, activeBobber, fishingAction >= 0)) {
+                return;
+            }
             GrinchAutoClickerFeature.tick(client, player, hookedEntity);
             if (!(hookedEntity instanceof MagmaCube)) {
                 handledMagmaCubeId = -1;
