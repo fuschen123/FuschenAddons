@@ -19,6 +19,7 @@ public final class RandomMovementFeature {
     private static KeyMapping toggleKey;
     private static boolean active;
     private static boolean strafeLeft;
+    private static boolean ownsMovementKeys;
     private static int strafeTicks;
 
     private RandomMovementFeature() {
@@ -78,12 +79,34 @@ public final class RandomMovementFeature {
         client.options.keyShift.setDown(true);
         client.options.keyLeft.setDown(strafeLeft);
         client.options.keyRight.setDown(!strafeLeft);
+        ownsMovementKeys = true;
     }
 
     private static void releaseMovementKeys(Minecraft client) {
-        client.options.keyDown.setDown(false);
-        client.options.keyShift.setDown(false);
-        client.options.keyLeft.setDown(false);
-        client.options.keyRight.setDown(false);
+        // Do not modify vanilla controls while the feature has never taken control.
+        // When it does release them, restore the actual physical state so held keys
+        // and custom bindings continue to work normally.
+        if (!ownsMovementKeys) {
+            return;
+        }
+        restorePhysicalState(client, client.options.keyDown);
+        restorePhysicalState(client, client.options.keyShift);
+        restorePhysicalState(client, client.options.keyLeft);
+        restorePhysicalState(client, client.options.keyRight);
+        ownsMovementKeys = false;
+    }
+
+    private static void restorePhysicalState(Minecraft client, KeyMapping mapping) {
+        if (mapping.isUnbound()) {
+            mapping.setDown(false);
+            return;
+        }
+
+        InputConstants.Key key = InputConstants.getKey(mapping.saveString());
+        boolean physicallyDown = switch (key.getType()) {
+            case KEYSYM, SCANCODE -> InputConstants.isKeyDown(client.getWindow(), key.getValue());
+            case MOUSE -> GLFW.glfwGetMouseButton(client.getWindow().getWindow(), key.getValue()) == GLFW.GLFW_PRESS;
+        };
+        mapping.setDown(physicallyDown);
     }
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.37
+
+### Fixed
+
+- Preserve ordinary movement controls while random movement is inactive, and restore physically held movement keys when the feature stops or pauses for a menu.
+
 ## 0.0.36
 
 ### Added
