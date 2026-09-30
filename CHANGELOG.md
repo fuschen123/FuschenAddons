@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.38
+
+### Fixed
+
+- Use the supported window handle API when restoring a physically held mouse-bound movement key.
+
 ## 0.0.37
 
 ### Fixed

@@ -105,7 +105,7 @@ public final class RandomMovementFeature {
         InputConstants.Key key = InputConstants.getKey(mapping.saveString());
         boolean physicallyDown = switch (key.getType()) {
             case KEYSYM, SCANCODE -> InputConstants.isKeyDown(client.getWindow(), key.getValue());
-            case MOUSE -> GLFW.glfwGetMouseButton(client.getWindow().getWindow(), key.getValue()) == GLFW.GLFW_PRESS;
+            case MOUSE -> GLFW.glfwGetMouseButton(client.getWindow().handle(), key.getValue()) == GLFW.GLFW_PRESS;
         };
         mapping.setDown(physicallyDown);
     }
