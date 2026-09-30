@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.39
+
+### Changed
+
+- Keep random movement running while Minecraft is unfocused by temporarily disabling pause-on-lost-focus while the feature is active; restore the previous setting when stopped.
+
 ## 0.0.38
 
 ### Fixed

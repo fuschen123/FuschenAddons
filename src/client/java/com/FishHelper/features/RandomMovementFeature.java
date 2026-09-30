@@ -20,6 +20,8 @@ public final class RandomMovementFeature {
     private static boolean active;
     private static boolean strafeLeft;
     private static boolean ownsMovementKeys;
+    private static boolean pauseOnLostFocusBeforeActivation;
+    private static boolean pauseOnLostFocusOverridden;
     private static int strafeTicks;
 
     private RandomMovementFeature() {
@@ -39,13 +41,15 @@ public final class RandomMovementFeature {
         while (toggleKey.consumeClick()) {
             // Avoid toggling the macro from a GUI/keybind menu.
             if (Config.INSTANCE.randomMovementEnabled && client.screen == null
-                    && client.player != null && client.isWindowActive()) {
+                    && client.player != null) {
                 active = !active;
                 if (active) {
                     strafeLeft = ThreadLocalRandom.current().nextBoolean();
                     strafeTicks = ThreadLocalRandom.current().nextInt(3, 8);
+                    disablePauseOnLostFocus(client);
                 } else {
                     releaseMovementKeys(client);
+                    restorePauseOnLostFocus(client);
                 }
                 client.player.sendSystemMessage(Component.literal(STATUS_PREFIX
                         + " Random movement: " + (active ? "§aON" : "§cOFF")));
@@ -55,10 +59,20 @@ public final class RandomMovementFeature {
         if (!Config.INSTANCE.randomMovementEnabled) {
             active = false;
             releaseMovementKeys(client);
+            restorePauseOnLostFocus(client);
             return;
         }
 
-        if (!active || client.player == null || client.level == null || !client.isWindowActive()) {
+        if (!active) {
+            releaseMovementKeys(client);
+            restorePauseOnLostFocus(client);
+            return;
+        }
+
+        // Minecraft otherwise pauses its client tick after focus is lost.
+        disablePauseOnLostFocus(client);
+
+        if (client.player == null || client.level == null) {
             releaseMovementKeys(client);
             return;
         }
@@ -108,5 +122,20 @@ public final class RandomMovementFeature {
             case MOUSE -> GLFW.glfwGetMouseButton(client.getWindow().handle(), key.getValue()) == GLFW.GLFW_PRESS;
         };
         mapping.setDown(physicallyDown);
+    }
+
+    private static void disablePauseOnLostFocus(Minecraft client) {
+        if (!pauseOnLostFocusOverridden) {
+            pauseOnLostFocusBeforeActivation = client.pauseOnLostFocus;
+            pauseOnLostFocusOverridden = true;
+        }
+        client.pauseOnLostFocus = false;
+    }
+
+    private static void restorePauseOnLostFocus(Minecraft client) {
+        if (pauseOnLostFocusOverridden) {
+            client.pauseOnLostFocus = pauseOnLostFocusBeforeActivation;
+            pauseOnLostFocusOverridden = false;
+        }
     }
 }
