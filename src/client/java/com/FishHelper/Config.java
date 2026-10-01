@@ -52,6 +52,9 @@ public class Config {
     /** Allow the randomly strafing movement macro to be activated by its Controls keybind. */
     public boolean randomMovementEnabled = false;
 
+    /** Interrupt fishing for the Ice Spray / Ink Wand / Hyperion Thunder response. */
+    public boolean thunderResponseEnabled = false;
+
     public enum FlareTier {
         NONE("None", ""),
         WARNING("Warning Flare", "warning flare"),

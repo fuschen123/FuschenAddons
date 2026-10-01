@@ -82,6 +82,7 @@ public class FishHelperClient implements ClientModInitializer {
     private static int hotspotRadarTimer;
     private static int hotspotRadarSlot = -1;
     private static int hotspotRadarRestoreSlot = -1;
+    private static ThunderResponseFeature thunderResponse;
 
     @Override
     public void onInitializeClient() {
@@ -137,7 +138,7 @@ public class FishHelperClient implements ClientModInitializer {
             String plainMessage = message.getString().replaceAll("(?i)§[0-9A-FK-OR]", "").strip();
 
             if (enabled && client.player != null) {
-                if (!hoppityAwaitingYes && !hoppityAwaitingWindow
+                if (thunderResponse == null && !hoppityAwaitingYes && !hoppityAwaitingWindow
                         && isHoppityRingMessage(plainMessage)) {
                     String pickupCommand = findClickableCommand(message, "PICK UP");
                     if (pickupCommand != null) {
@@ -156,7 +157,13 @@ public class FishHelperClient implements ClientModInitializer {
                 }
             }
 
-            if (enabled && !paused && STOP_MESSAGES.contains(message.getString().strip())) {
+            if (enabled && !paused && !overlay && Config.INSTANCE.thunderResponseEnabled
+                    && ThunderResponseFeature.SPAWN_MESSAGE.equals(plainMessage)) {
+                beginThunderResponse(client);
+                return;
+            }
+
+            if (enabled && !paused && thunderResponse == null && STOP_MESSAGES.contains(plainMessage)) {
                 switchToActionWeaponForRareCreature(client.player);
             }
         });
@@ -180,6 +187,7 @@ public class FishHelperClient implements ClientModInitializer {
             }
 
             while (TOGGLE_KEY.consumeClick()) {
+                finishThunderResponse();
                 if (hotspotRadarStage > 0 && client.player != null && hotspotRadarRestoreSlot >= 0) {
                     client.player.getInventory().setSelectedSlot(hotspotRadarRestoreSlot);
                 }
@@ -218,6 +226,23 @@ public class FishHelperClient implements ClientModInitializer {
 
             while (CONFIG_KEY.consumeClick()) {
                 openConfigMenu();
+            }
+
+            if (thunderResponse != null) {
+                if (!enabled || paused || !thunderResponse.canContinue()) {
+                    finishThunderResponse();
+                    // Menus, death and disabling the option require an explicit resume.
+                    paused = enabled;
+                    if (client.player != null && enabled) {
+                        client.player.sendSystemMessage(Component.literal(
+                                STATUS_PREFIX + " §ePAUSED (Thunder response cancelled; use the fishing toggle to resume)"));
+                    }
+                } else if (!thunderResponse.tick()) {
+                    finishThunderResponse();
+                    client.player.sendSystemMessage(Component.literal(
+                            STATUS_PREFIX + " §bThunder response finished; resuming fishing"));
+                }
+                return; // No fishing, pet, flare, radar or Grinch input in a Thunder tick.
             }
 
             if (hoppityAwaitingWindow
@@ -620,6 +645,44 @@ public class FishHelperClient implements ClientModInitializer {
         return -1;
     }
 
+    private static void beginThunderResponse(Minecraft client) {
+        if (thunderResponse != null || client.player == null || client.level == null
+                || client.gameMode == null || !client.player.isAlive()) return;
+        // Only close the pet screen owned by the interrupted fishing sequence.
+        if (client.screen != null) {
+            if ((fishingAction == 5 || fishingAction == 6)
+                    && client.screen instanceof AbstractContainerScreen<?> screen
+                    && isPetsMenu(screen.getTitle().getString())) client.setScreen(null);
+            else return;
+        }
+        int restoreSlot = rodSelectedSlotForAction >= 0 ? rodSelectedSlotForAction
+                : hotspotRadarRestoreSlot >= 0 ? hotspotRadarRestoreSlot
+                : client.player.getInventory().getSelectedSlot();
+        FishingHook bobber = findOwnedBobber(client, client.player);
+        var origin = bobber == null ? client.player.position() : bobber.position();
+        finishFishingAction();
+        WaterSnakeRecastFeature.reset();
+        sosFlarePending = false;
+        hotspotRadarStage = 0;
+        hotspotRadarTimer = 0;
+        hotspotRadarSlot = -1;
+        hotspotRadarRestoreSlot = -1;
+        thunderResponse = new ThunderResponseFeature(client, restoreSlot, origin);
+        client.player.sendSystemMessage(Component.literal(STATUS_PREFIX + " §bThunder response started"));
+    }
+
+    private static void finishThunderResponse() {
+        if (thunderResponse == null) return;
+        thunderResponse.finish();
+        thunderResponse = null;
+        biteAlertHandled = false;
+        bobberTrackingInitialized = false;
+        bobberWasActive = false;
+        bobberActiveTicks = 0;
+        trackedBobberUuid = null;
+        recastCheckTimer = 4;
+    }
+
     private static boolean isHoppityRingMessage(String message) {
         String normalized = message.toUpperCase(java.util.Locale.ROOT);
         return normalized.contains("RING")
@@ -941,6 +1004,7 @@ public class FishHelperClient implements ClientModInitializer {
     }
 
     private static void pauseForWorldChange(LocalPlayer player) {
+        finishThunderResponse();
         boolean newlyPaused = !paused;
         if (hotspotRadarStage > 0 && player != null && hotspotRadarRestoreSlot >= 0) {
             player.getInventory().setSelectedSlot(hotspotRadarRestoreSlot);
