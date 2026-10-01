@@ -8,7 +8,9 @@ additional settings at smaller GUI sizes. Controls support keyboard navigation;
 hover a setting to read its full description. Valid edits save automatically.
 All existing settings and the `fuschenaddons.json` file are retained.
 
-Cascade `2026.09.7+26.1` and Fabric Language Kotlin are bundled in the mod JAR.
+Cascade `2026.09.7+26.1` is bundled in the mod JAR. Install **Fabric Language
+Kotlin `1.13.13+kotlin.2.4.10` or newer** separately in your `mods` folder; it is
+required by the config UI and Cascade and is not bundled with FuschenAddons.
 Minecraft 26.1.2, Java 25, and Fabric API are still required.
 
 ## Thunder response
