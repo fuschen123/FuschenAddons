@@ -1,4 +1,4 @@
-# FuschenAddons 0.0.44
+# FuschenAddons 0.0.45
 
 Client-side fishing helper by fuschen. Built for **Minecraft 26.1.2, Java 25,
 Fabric Loader >= 0.19.5 and Fabric API**. Cascade `2026.09.7+26.1` is bundled.
@@ -67,8 +67,32 @@ option or missing Hyperion ends this action while keeping fishing enabled. Fishi
 continues automatically once prerequisites are available. Only a server/world
 change automatically switches fishing off; activate it manually in the new world.
 Old-world camera/slot state is never applied to a new player or world. With the
-option off, rare-creature messages briefly select the configured action weapon
+option off, other rare-creature messages briefly select the configured action weapon
 and then allow fishing to continue.
+
+## Lord Jawbus fishing pause
+
+FishHelper pauses its automatic actions immediately on your exact Jawbus spawn
+message, or when the shared tracker recognizes a Lord Jawbus within 32 blocks of
+you or your fishing hook. This is a temporary action pause: FishHelper stays enabled.
+Every queued catch, pet, flare, radar, recast, mob recovery and Thunder action is
+cancelled. Neither the five-second watchdog nor an attached Water Snake/Magma Cube
+can issue clicks during this pause. New chat-triggered actions are blocked too.
+
+Own spawn messages reserve up to 200 client ticks (10 seconds at 20 TPS) for the
+entity/nametag to arrive; multiple pending spawns are tracked separately. Once a
+Jawbus is acquired, its living UUID stays relevant even outside the acquisition or
+attack radius and during nametag gaps. Additional nearby Jawbus join the encounter.
+Confirmed death or a zero-HP nametag removes that mob; an unloaded/absent mob must
+remain absent for 100 consecutive client ticks (five seconds). A returning UUID,
+including one with a new entity ID, cancels that absence countdown. A live loaded
+Jawbus is never released solely because a timer elapsed or its range changed.
+
+The pause ends only when all tracked Jawbus and pending spawn waits have cleared.
+Fishing action state and the watchdog are reset before normal processing resumes;
+other menu/Hoppity waits still apply. There is at most one start and one end message
+per pause. Manual OFF or server/world change clears the encounter and takes priority;
+ending a Jawbus pause never enables FishHelper. No new toggle is required.
 
 ## Thunder Muter
 
@@ -138,11 +162,13 @@ hook is left alone. This repairs the state instead of requiring an off/on toggle
 
 ## Development and validation
 
-Run `./gradlew clean build` with Java 25. The 50-test unit suite covers Feesh's actual
+Run `./gradlew clean build` with Java 25. The 62-test unit suite covers Feesh's actual
 formatted nametag examples, partial/unknown health, identity deduplication and gaps,
 multiple Thunder, radius exit/reentry, 5-CPS timing, missing items, single-shot hook
 recovery, delayed release, retry limits, watchdog exemptions/preemption, the exact
 65-second sound tail, encounter deduplication, dropdown boundaries and HUD coordinates.
+Jawbus tests cover delayed/multiple spawn signals, multiple mobs, radius exit,
+confirmed death, short/long absence, entity-ID replacement and world/reset cleanup.
 
 Run `./gradlew -I smoke.gradle runClient --no-configuration-cache` for the optional
 local dev-client smoke suite. It creates a disposable creative world under ignored
@@ -158,6 +184,10 @@ stale hook reconciliation, missing-rod return, idle/legitimate waits, action tim
 menu continuation, queued flare preservation, manual/world off and Thunder mapping.
 The Muter toggle persists and rejects non-SkyBlock sound in that client. Pure logic
 tests cover its positive filtering and tail. These are not live Hypixel tests.
+Additional Jawbus client fixtures exercise immediate cancellation during a pending
+recast and normal catch, attached-mob recovery exclusion, nametag/range/entity gaps,
+multiple mobs, zero-HP death, Hoppity/menu waits, a fresh watchdog window, and
+manual/world OFF.
 Still verify on the server:
 
 - Live Thunder nametag/entity pairing, aiming, multiple nearby Thunder, packet gaps,
@@ -167,6 +197,8 @@ Still verify on the server:
 - Cancellation on menus, death, option disable, toggle and world changes; existing
   pet, flare, Hoppity, Grinch and movement behavior under real server timing.
 - Muting with a real SkyBlock sidebar, live Thunder sounds and the 65-second tail.
+- Real Jawbus spawn/nametag packet ordering, kills and unloads during fishing/recast,
+  multiple simultaneous Jawbus and automatic fishing continuation after the fight.
 
 ## License
 

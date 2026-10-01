@@ -59,4 +59,11 @@ class RecastSequenceTest {
         var c = new Controls(); var s = new RecastSequence(c.original); s.tick(c); s.cancel(); ticks(s,c,200);
         assertEquals(0,c.reels); assertEquals(0,c.casts);
     }
+    @Test void jawbusCancellationAfterReelingCannotCastWhenTheServerLaterReleasesTheHook() {
+        var c = new Controls(); var s = new RecastSequence(c.original); ticks(s,c,4);
+        assertEquals(1,c.reels); assertEquals(0,c.casts);
+        s.cancel(); c.hook = null; ticks(s,c,500);
+        assertEquals(RecastSequence.Problem.CANCELLED,s.problem());
+        assertEquals(1,c.reels); assertEquals(0,c.casts);
+    }
 }

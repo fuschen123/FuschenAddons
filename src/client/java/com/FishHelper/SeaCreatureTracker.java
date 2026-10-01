@@ -13,17 +13,20 @@ import net.minecraft.world.entity.monster.MagmaCube;
 import net.minecraft.world.entity.player.Player;
 import java.util.*;
 
-/** Shared by the HUD and Thunder; display stands are never returned as combat targets. */
+/** Shared by the HUD, Thunder and Jawbus pause; display stands are never returned as mob targets. */
 final class SeaCreatureTracker {
     static final SeaCreatureTracker INSTANCE = new SeaCreatureTracker();
     private final SeaCreatureMemory memory = new SeaCreatureMemory();
     private ClientLevel world;
     private long ticks;
     private UUID hudTarget;
+    private final Set<UUID> confirmedDeaths = new HashSet<>();
 
-    void reset() { memory.clear(); hudTarget = null; ticks = 0; world = null; }
+    void reset() { memory.clear(); confirmedDeaths.clear(); hudTarget = null; ticks = 0; world = null; }
+    boolean confirmedDead(UUID uuid) { return confirmedDeaths.contains(uuid); }
 
     void tick(Minecraft client) {
+        confirmedDeaths.clear();
         if (world != client.level) { memory.clear(); hudTarget = null; ticks = 0; world = client.level; }
         if (world == null) return;
         ticks++;
@@ -51,6 +54,9 @@ final class SeaCreatureTracker {
             observations.add(new SeaCreatureMemory.Observation(mob.getUUID(), mob.getId(), tag));
         }
         memory.update(ticks, observations, presence);
+        for (SeaCreatureMemory.Observation observation : observations)
+            if (observation.nametag().dead()) confirmedDeaths.add(observation.uuid());
+        presence.forEach((uuid, state) -> { if (state == SeaCreatureMemory.Presence.DEAD) confirmedDeaths.add(uuid); });
     }
 
     Collection<SeaCreatureMemory.Entry> creatures() { return memory.entries(); }

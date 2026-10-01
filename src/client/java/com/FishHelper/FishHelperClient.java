@@ -39,7 +39,6 @@ public class FishHelperClient implements ClientModInitializer {
     private static final Set<String> STOP_MESSAGES = Set.of(
             "A Fiery Scuttler inconspicuously waddles up to you, friends in tow.",
             "You hear a massive rumble as Thunder emerges.",
-            "You have angered a legendary creature... Lord Jawbus has arrived.",
             "WOAH! A Plhlegblast appeared.",
             "The sky darkens and the air thickens. The end times are upon us: Ragnarok is here."
     );
@@ -60,6 +59,7 @@ public class FishHelperClient implements ClientModInitializer {
     private static UUID trackedBobberUuid;
     private static final FishingWatchdog WATCHDOG = new FishingWatchdog();
     private static final ActionDeadline ACTION_DEADLINE = new ActionDeadline();
+    private static final JawbusPauseFeature JAWBUS_PAUSE = new JawbusPauseFeature();
     private static int recoveryRetryTicks, rareCreatureTicks;
     private static boolean petAfterRecovery, pendingRecast;
     private static RodAccess normalRod;
@@ -130,9 +130,23 @@ public class FishHelperClient implements ClientModInitializer {
             }
         });
 
-        ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
-            Minecraft client = Minecraft.getInstance();
+        ClientReceiveMessageEvents.GAME.register((message, overlay) ->
+                onGameMessage(Minecraft.getInstance(), message, overlay));
+        ClientTickEvents.END_CLIENT_TICK.register(FishHelperClient::tick);
+    }
+
+    static void onGameMessage(Minecraft client, Component message, boolean overlay) {
+            // A late old-world packet must not start or restore actions before the next tick disables us.
+            if (worldLevelObservationInitialized && (observedWorldLevel != client.level
+                    || observedConnection != client.getConnection())) return;
             String plainMessage = message.getString().replaceAll("(?i)§[0-9A-FK-OR]", "").strip();
+
+            if (enabled && !overlay && JawbusPauseFeature.SPAWN_MESSAGE.equals(plainMessage)) {
+                if (JAWBUS_PAUSE.spawned(client) == JawbusPause.Change.STARTED) beginJawbusPause(client);
+                return;
+            }
+            // Chat-triggered Thunder, Hoppity or rare-mob actions cannot bypass this input owner.
+            if (JAWBUS_PAUSE.active()) return;
 
             if (enabled && client.player != null) {
                 if (thunderResponse == null && hookRecovery == null && !hoppityAwaitingYes && !hoppityAwaitingWindow
@@ -168,9 +182,6 @@ public class FishHelperClient implements ClientModInitializer {
                 switchToActionWeaponForRareCreature(client.player);
                 rareCreatureTicks = 40;
             }
-        });
-
-        ClientTickEvents.END_CLIENT_TICK.register(FishHelperClient::tick);
     }
 
     static void tick(Minecraft client) {
@@ -199,6 +210,7 @@ public class FishHelperClient implements ClientModInitializer {
 
             while (TOGGLE_KEY.consumeClick()) {
                 resetActions(client.player, true);
+                JAWBUS_PAUSE.reset();
                 enabled = !enabled;
 
                 if (client.player != null) {
@@ -212,6 +224,14 @@ public class FishHelperClient implements ClientModInitializer {
             }
 
             if (!enabled) return;
+            JawbusPause.Change jawbusChange = JAWBUS_PAUSE.tick(client);
+            if (jawbusChange == JawbusPause.Change.STARTED) beginJawbusPause(client);
+            if (jawbusChange == JawbusPause.Change.ENDED) {
+                resetFishingActions(client.player, true);
+                client.player.sendSystemMessage(Component.literal(STATUS_PREFIX + " §bJawbus pause ended"));
+                return; // Recheck menus/Hoppity/death next tick; never re-enable the helper here.
+            }
+            if (JAWBUS_PAUSE.active()) return;
             if (recoveryRetryTicks > 0) recoveryRetryTicks--;
             UUID currentHook = client.player == null ? null : hookUuid(findOwnedBobber(client, client.player));
             if (WATCHDOG.observe(currentHook)) {
@@ -622,7 +642,7 @@ public class FishHelperClient implements ClientModInitializer {
     }
 
     private static void beginThunderResponse(Minecraft client) {
-        if (thunderResponse != null || client.player == null || client.level == null
+        if (JAWBUS_PAUSE.active() || thunderResponse != null || client.player == null || client.level == null
                 || client.gameMode == null || !client.player.isAlive()) return;
         // Only close the pet screen owned by the interrupted fishing sequence.
         if (client.screen != null) {
@@ -680,7 +700,7 @@ public class FishHelperClient implements ClientModInitializer {
     }
 
     private static void beginRecast(Minecraft client, UUID hook, UUID mob, boolean attack, boolean pet) {
-        if (!enabled || hookRecovery != null || thunderResponse != null || client.player == null || client.screen != null) return;
+        if (!enabled || JAWBUS_PAUSE.active() || hookRecovery != null || thunderResponse != null || client.player == null || client.screen != null) return;
         hookRecovery = new HookRecoveryFeature(client, hook, mob, rodSelectedSlotForAction, rodHandForAction, attack, HOOK_ENCOUNTERS);
         petAfterRecovery = pet;
         pendingRecast = false;
@@ -1029,6 +1049,7 @@ public class FishHelperClient implements ClientModInitializer {
     private static void stopForWorldChange(LocalPlayer player) {
         boolean wasEnabled = enabled;
         enabled = false;
+        JAWBUS_PAUSE.reset();
         while (TOGGLE_KEY.consumeClick()) { /* Do not carry an activation queued in the old world across. */ }
         resetActions(player, false);
         HOOK_ENCOUNTERS.clear();
@@ -1040,6 +1061,18 @@ public class FishHelperClient implements ClientModInitializer {
     }
 
     private static void resetActions(LocalPlayer player, boolean restore) {
+        resetFishingActions(player, restore);
+        hoppityAwaitingYes = hoppityAwaitingWindow = hoppityWindowDetected = false;
+        hoppityPauseTicks = 0; hoppityScreenBeforeAccept = null;
+    }
+
+    private static void beginJawbusPause(Minecraft client) {
+        resetFishingActions(client.player, true);
+        client.player.sendSystemMessage(Component.literal(STATUS_PREFIX + " §eJawbus nearby; fishing paused"));
+    }
+
+    /** Cancels every queued fishing input without clearing independent Hoppity/menu waits. */
+    private static void resetFishingActions(LocalPlayer player, boolean restore) {
         finishHookRecovery();
         finishThunderResponse();
         if (restore && player != null) {
@@ -1055,8 +1088,6 @@ public class FishHelperClient implements ClientModInitializer {
         sosFlarePending = false;
         biteAlertHandled = bobberTrackingInitialized = bobberWasActive = false;
         bobberActiveTicks = 0; trackedBobberUuid = null;
-        hoppityAwaitingYes = hoppityAwaitingWindow = hoppityWindowDetected = false;
-        hoppityPauseTicks = 0; hoppityScreenBeforeAccept = null;
         clearTrackedHotspot();
         hotspotRadarStage = hotspotRadarTimer = 0;
         hotspotRadarSlot = hotspotRadarRestoreSlot = -1;
