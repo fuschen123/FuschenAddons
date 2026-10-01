@@ -4,13 +4,12 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-/** World-scoped: even a failed attempt consumes the encounter, and a rehooked mob cannot loop. */
+/** Only successful weapon/reel use consumes an input; failed prerequisites stay retryable. */
 public final class HookEncounterGuard {
-    private final Set<UUID> hooks = new HashSet<>(), mobs = new HashSet<>();
-    public boolean claim(UUID hook, UUID mob) {
-        boolean fresh = !hooks.contains(hook) && !mobs.contains(mob);
-        hooks.add(hook); mobs.add(mob);
-        return fresh;
-    }
-    public void clear() { hooks.clear(); mobs.clear(); }
+    private final Set<UUID> hooks = new HashSet<>(), mobs = new HashSet<>(), reeled = new HashSet<>();
+    public boolean wasUsed(UUID hook, UUID mob) { return hooks.contains(hook) || mobs.contains(mob); }
+    public void used(UUID hook, UUID mob) { hooks.add(hook); mobs.add(mob); }
+    public boolean wasReeled(UUID hook) { return reeled.contains(hook); }
+    public void reeled(UUID hook) { if (hook != null) reeled.add(hook); }
+    public void clear() { hooks.clear(); mobs.clear(); reeled.clear(); }
 }

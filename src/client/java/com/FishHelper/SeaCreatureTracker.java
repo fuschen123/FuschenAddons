@@ -21,6 +21,8 @@ final class SeaCreatureTracker {
     private long ticks;
     private UUID hudTarget;
 
+    void reset() { memory.clear(); hudTarget = null; ticks = 0; world = null; }
+
     void tick(Minecraft client) {
         if (world != client.level) { memory.clear(); hudTarget = null; ticks = 0; world = client.level; }
         if (world == null) return;

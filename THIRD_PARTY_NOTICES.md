@@ -1,5 +1,44 @@
 # Third-party notices
 
+## FishyAddons Thunder sound filter (GNU GPL version 3)
+
+The Thunder Muter is adapted from **FishyAddons**, by **valkeea and contributors**,
+under the GNU General Public License version 3. The GitHub source was inspected
+directly on 2026-10-01 at commit
+[`408916b56f236e180a50d5e38f706c5a09057b5c`](https://github.com/valkeea/FishyAddons/tree/408916b56f236e180a50d5e38f706c5a09057b5c).
+No installed FishyAddons JAR was used.
+
+Inspected source:
+
+- [`SkyblockCleaner.java`](https://github.com/valkeea/FishyAddons/blob/408916b56f236e180a50d5e38f706c5a09057b5c/common/src/client/java/me/valkeea/fishyaddons/feature/skyblock/SkyblockCleaner.java):
+  `thunderSound()`, `muteThunder()` and the relevant `shouldClean()` branch.
+- [`MixinSoundSystem.java`](https://github.com/valkeea/FishyAddons/blob/408916b56f236e180a50d5e38f706c5a09057b5c/common/src/client/java/me/valkeea/fishyaddons/mixin/MixinSoundSystem.java):
+  cancellable `SoundEngine.play(SoundInstance)` interception returning `NOT_STARTED`.
+- [`GameMode.java`](https://github.com/valkeea/FishyAddons/blob/408916b56f236e180a50d5e38f706c5a09057b5c/common/src/client/java/me/valkeea/fishyaddons/api/skyblock/GameMode.java):
+  inspected Hypixel address and SkyBlock sidebar gating.
+
+Adapted files: `ThunderSoundFilter.java`, `ThunderMuter.java` and
+`mixin/ThunderSoundMixin.java`. Changes: isolated and testable sound/timestamp state;
+the central FuschenAddons tracker supplies actual living Thunder; a dedicated
+persisted option; Minecraft 26.1.2 sound bindings; world/server reset and explicit
+first-match state; host suffix validation for the SkyBlock gate. The original
+`lightning_bolt`/`guardian` substring matching and 65-second tail are retained.
+No other cleaner features or FishyAddons runtime dependencies are included.
+
+The combined distribution is GPL-3.0-only. The full upstream GPL version 3 text is
+in the root `LICENSE`, included in the binary and sources JAR. Complete buildable
+source is provided by this repository and the source ZIP accompanying the binary.
+The original FuschenAddons CC0 dedication is retained in
+`src/main/resources/licenses/FuschenAddons-original-CC0.txt`; this notice does not
+withdraw those original permissions or the other third-party licenses below.
+
+## Cascade UI (BSD 3-Clause)
+
+Cascade `2026.09.7+26.1` is bundled as a nested JAR. Copyright (c) 2025, Starred.
+Source: https://github.com/skies-starred/cascade
+Its full BSD 3-Clause license is also included at
+`src/main/resources/licenses/Cascade-BSD-3-Clause.txt` (under `licenses/` in the binary).
+
 ## Feesh detection adaptation (Apache License 2.0)
 
 Parts of the sea-creature recognition in FuschenAddons are adapted from

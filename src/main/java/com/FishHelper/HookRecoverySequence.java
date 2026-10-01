@@ -1,61 +1,36 @@
 package com.FishHelper;
 
-/** Single-shot input sequence; waits for the original hook to disappear before casting. */
+/** Optional one-shot Hyperion action followed by the shared acknowledged recast. */
 public final class HookRecoverySequence {
-    public enum Hook { ORIGINAL, NONE, OTHER }
-    public interface Controls {
+    public interface Controls extends RecastSequence.Controls {
+        boolean rodAvailable();
         boolean selectHyperion();
         boolean useHyperion();
-        boolean restoreRod();
-        Hook hook();
-        void useRod();
     }
-    private enum Stage { SELECT, USE, RESTORE, REEL, WAIT_GONE, CAST, DONE }
-    private Stage stage = Stage.SELECT;
-    private int delay, goneTicks;
-    private boolean aborted;
-    public boolean active() { return stage != Stage.DONE; }
-    public boolean aborted() { return aborted; }
-    public void cancel() { stage = Stage.DONE; aborted = true; }
-
-    public void tick(Controls controls) {
+    private int stage, delay;
+    private final RecastSequence recast;
+    private RecastSequence.Problem problem = RecastSequence.Problem.NONE;
+    public HookRecoverySequence(boolean hyperion, java.util.UUID hook) {
+        stage = hyperion ? 0 : 2;
+        recast = new RecastSequence(hook);
+    }
+    public boolean active() { return stage < 3; }
+    public boolean aborted() { return problem != RecastSequence.Problem.NONE; }
+    public RecastSequence.Problem problem() { return problem; }
+    public void cancel() { problem = RecastSequence.Problem.CANCELLED; stage = 3; }
+    public void tick(Controls c) {
         if (!active() || delay > 0 && --delay > 0) return;
-        switch (stage) {
-            case SELECT -> {
-                if (!controls.selectHyperion()) { cancel(); return; }
-                stage = Stage.USE; delay = 2;
-            }
-            case USE -> {
-                if (!controls.useHyperion()) { cancel(); return; }
-                stage = Stage.RESTORE; delay = 2;
-            }
-            case RESTORE -> {
-                if (!controls.restoreRod()) { cancel(); return; }
-                stage = Stage.REEL; delay = 2;
-            }
-            case REEL -> {
-                if (!controls.restoreRod()) { cancel(); return; }
-                switch (controls.hook()) {
-                    case OTHER -> stage = Stage.DONE; // Somebody has already cast again; leave it alone.
-                    case NONE -> { stage = Stage.CAST; delay = 2; }
-                    case ORIGINAL -> { controls.useRod(); stage = Stage.WAIT_GONE; delay = 2; }
-                }
-            }
-            case WAIT_GONE -> {
-                switch (controls.hook()) {
-                    case OTHER -> stage = Stage.DONE;
-                    case NONE -> { stage = Stage.CAST; delay = 2; }
-                    case ORIGINAL -> { if (++goneTicks >= 40) cancel(); }
-                }
-            }
-            case CAST -> {
-                if (controls.hook() == Hook.NONE) {
-                    if (!controls.restoreRod()) { cancel(); return; }
-                    controls.useRod();
-                }
-                stage = Stage.DONE;
-            }
-            case DONE -> { }
+        if (stage == 0) {
+            if (!c.selectRod()) { problem = RecastSequence.Problem.MISSING_ROD; stage = 3; return; }
+            if (!c.selectHyperion()) { problem = RecastSequence.Problem.MISSING_HYPERION; stage = 3; return; }
+            stage = 1; delay = 2;
+        } else if (stage == 1) {
+            if (!c.rodAvailable()) { problem = RecastSequence.Problem.MISSING_ROD; stage = 3; return; }
+            if (!c.useHyperion()) { problem = RecastSequence.Problem.MISSING_HYPERION; stage = 3; return; }
+            stage = 2; delay = 2;
+        } else {
+            recast.tick(c);
+            if (!recast.active()) { problem = recast.problem(); stage = 3; }
         }
     }
 }
