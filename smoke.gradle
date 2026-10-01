@@ -1,0 +1,37 @@
+// Optional, local integration checks; requires a graphical desktop and Java 25.
+// ./gradlew -I smoke.gradle runClient --no-configuration-cache
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+
+allprojects {
+    afterEvaluate {
+        sourceSets.client.java.srcDir(file('src/smoke/java'))
+        tasks.named('processResources') {
+            inputs.property('smokeClient', true)
+            doLast {
+                def metadata = new File(destinationDir, 'fabric.mod.json')
+                def json = new JsonSlurper().parse(metadata)
+                json.entrypoints.client += 'com.FishHelper.SmokeClient'
+                metadata.text = JsonOutput.toJson(json)
+            }
+        }
+        def result = file('build/smoke-result.txt')
+        tasks.named('runClient') {
+            doFirst {
+                result.text = 'RUNNING'
+                file('build/smoke-captures/screenshots').mkdirs()
+            }
+            doLast {
+                if (!result.isFile() || result.text.trim() != 'PASS') {
+                    throw new GradleException('Client smoke checks did not complete. Check SMOKE_FAILED in run/logs/latest.log.')
+                }
+                ['dropdown-weapon', 'dropdown-pet-compact', 'hud-preview-compact',
+                 'hud-dragged-compact', 'hud-resized', 'general-healthbar', 'thunder-muter'].each { name ->
+                    if (!file("build/smoke-captures/screenshots/${name}.png").isFile()) {
+                        throw new GradleException("Missing smoke screenshot: ${name}")
+                    }
+                }
+            }
+        }
+    }
+}

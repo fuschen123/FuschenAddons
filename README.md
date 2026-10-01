@@ -1,4 +1,4 @@
-# FuschenAddons 0.0.43
+# FuschenAddons 0.0.44
 
 Client-side fishing helper by fuschen. Built for **Minecraft 26.1.2, Java 25,
 Fabric Loader >= 0.19.5 and Fabric API**. Cascade `2026.09.7+26.1` is bundled.
@@ -13,6 +13,8 @@ Fishing Pet now use dropdowns. Click a row to select; Escape or an outside click
 closes the popup. Arrow keys, Home/End and Enter also work. The popup scrolls
 independently of the page and opens above/below its control to fit the screen.
 Values save automatically in `config/fuschenaddons.json`; old settings are retained.
+The fishing keybind is now labelled **Start/Stop FishHelper**. Its binding and the
+mod's name are unchanged.
 
 **General -> Sea Creature healthbar** controls the overlay. **Edit HUD**,
 `/fa gui` and `/fuschen gui` open its drag editor. Drag with the left mouse button;
@@ -61,10 +63,47 @@ once joined, a loaded living Thunder remains relevant even if it moves farther a
    or the death of only one of several Thunder cannot finish the encounter.
 
 The fishing toggle cancels immediately. Opening a menu, death, disabling this
-option, disconnecting or changing worlds cancels and pauses fishing. Failure to
-find Thunder or a usable Hyperion also pauses. Resume with the fishing toggle.
+option or missing Hyperion ends this action while keeping fishing enabled. Fishing
+continues automatically once prerequisites are available. Only a server/world
+change automatically switches fishing off; activate it manually in the new world.
 Old-world camera/slot state is never applied to a new player or world. With the
-option off, the previous rare-creature stop behavior remains.
+option off, rare-creature messages briefly select the configured action weapon
+and then allow fishing to continue.
+
+## Thunder Muter
+
+**Thunder -> Thunder Muter** is a separate, saved toggle, off by default. It works
+even while FishHelper is off. Its sound filter is adapted directly from FishyAddons'
+GitHub source; FishyAddons is not a runtime dependency. Attribution, pinned source
+links and the GPL-3.0 license are in [third-party notices](THIRD_PARTY_NOTICES.md).
+
+Filtering requires a Hypixel server address and a SkyBlock sidebar title. Paths
+containing `lightning_bolt` or `guardian` are muted while the shared tracker has an
+actual living Thunder. Each matching sound during that encounter refreshes a
+65-second tail. Sounds during the tail do not extend it. World/server changes reset
+the tail. Other sounds, creature recognition and combat actions are unaffected.
+
+## Five-second idle watchdog and automatic continuation
+
+While enabled, 100 actionable idle client ticks trigger the same controlled
+reel/release/cast sequence used by normal fishing. Normal bite waiting in water or
+lava, a valid nearby hook countdown and the configured Slugfish timing are exempt.
+Menus, Hoppity, Thunder, catch/weapon/pet/flare actions and active recovery have
+exclusive control; the watchdog cannot add clicks or slot changes during them.
+
+Normal action/radar phases have a 100-tick deadline that repeated timer updates
+cannot extend. Stuck phases restore the rod and enter controlled recovery. Hoppity
+prompt/window arrival waits expire after 200 ticks; an open menu still blocks
+fishing until closed. Thunder's search and recognition-gap handling remain bounded;
+waiting for a live encounter Thunder to return within attack range is intentional.
+
+Missing rods or prerequisites leave the helper enabled, without click spam. It
+rechecks availability and resumes automatically. Failed recovery attempts clear
+their action state and impose a 100-tick retry delay. Repeated attempts alone do
+not count as progress; confirmed hook changes and completed recasts do. A confirmed
+recast starts a fresh five-second idle window. Messages are deduplicated per problem
+state. Hotspot disappearance and rare-creature handling no longer require toggling.
+Manual off and world/server-change off cannot be undone by the watchdog.
 
 ## Mob attached to your hook
 
@@ -72,32 +111,54 @@ Only the actual `getHookedIn()` entity on a hook owned by your player can trigge
 recovery. Nearby creatures alone do not. The unified sequence replaces the old
 Water Snake and Magma Cube right-click sequences:
 
-1. Verify the original rod/hand and a hotbar Hyperion, select Hyperion and click once.
-2. Restore the original slot and rod hand (including an offhand rod).
+1. Find the rod and a hotbar Hyperion, select Hyperion and click once.
+2. Re-resolve the original rod, including a moved hotbar slot or offhand rod.
 3. Reel once if the original hook still exists; wait for it to disappear before
    casting once. If switching weapons already removed it, only cast. Leave a new,
    different hook alone.
 
-Each hook and mob UUID is claimed once per world, including failed/cancelled
-attempts. Rehooking the same mob cannot loop Hyperion/recast. A hook that survives
-reeling times out after 40 ticks and pauses. Missing/moved items and menus also
-abort safely and pause. After a failure, manually clear the stuck hook before
-resuming. Thunder preempts recovery; fishing, pet, radar, flare and Grinch inputs
-cannot overlap an active recovery. Grinch's configured left clicks can still run
+Each hook and mob UUID consumes its Hyperion action only after the click is issued;
+missing prerequisites do not consume it. Rehooking the same mob cannot loop Hyperion.
+Reeling is also recorded per hook UUID, so a timed-out attempt cannot repeatedly
+toggle the rod on an unacknowledged hook. Release and cast confirmation each wait
+up to 100 ticks, then automatically retry verification after a backoff. A still-live
+old hook is never forcibly removed; casting waits until its actual release.
+Thunder preempts recovery; fishing, pet, radar, flare and Grinch inputs cannot overlap
+an active recovery. Grinch's configured left clicks can still run between retries
 on a consumed, still-attached encounter; normal right-click timers stay suppressed.
 Water Snake armor-stand models are verified by their head texture, not a nearby label.
 
+The old `missing or hook not released; toggle to resume` path combined stale
+slot/hand snapshots, a short hook-release timeout and a persistent pause. Recovery
+now distinguishes missing items, release timeout and cast confirmation. The live
+owned hook in the world registry is authoritative. A stale `player.fishing` pointer
+is repaired from that entity or cleared only after four consecutive ticks with no
+live owned hook. A new cast additionally waits for stable absence; a different new
+hook is left alone. This repairs the state instead of requiring an off/on toggle.
+
 ## Development and validation
 
-Run `./gradlew clean build` with Java 25. The unit suite covers Feesh's actual
+Run `./gradlew clean build` with Java 25. The 50-test unit suite covers Feesh's actual
 formatted nametag examples, partial/unknown health, identity deduplication and gaps,
 multiple Thunder, radius exit/reentry, 5-CPS timing, missing items, single-shot hook
-recovery, timeouts, encounter deduplication, dropdown boundaries and HUD coordinates.
+recovery, delayed release, retry limits, watchdog exemptions/preemption, the exact
+65-second sound tail, encounter deduplication, dropdown boundaries and HUD coordinates.
 
-Local dev-client smoke checks exercise actual mouse/keyboard screen handlers,
+Run `./gradlew -I smoke.gradle runClient --no-configuration-cache` for the optional
+local dev-client smoke suite. It creates a disposable creative world under ignored
+`run/saves`, writes screenshots to `build/smoke-captures/screenshots` and fails the
+task unless `build/smoke-result.txt` reports success. The harness is excluded from
+normal builds. After a smoke run, use `./gradlew clean build` for distribution.
+
+The smoke checks exercise actual mouse/keyboard screen handlers,
 dropdown scrolling and closing, all four registered command paths, config reload,
-HUD drag/save/resize, and Cascade rendering at GUI scales 1 and 2. This is not a
-live Hypixel test. Before relying on the automation in game, verify:
+HUD drag/save/resize, and Cascade rendering at GUI scales 1 and 2. A local world with
+synthetic client entities and accelerated ticks checks rod slot/offhand moves,
+stale hook reconciliation, missing-rod return, idle/legitimate waits, action timeouts,
+menu continuation, queued flare preservation, manual/world off and Thunder mapping.
+The Muter toggle persists and rejects non-SkyBlock sound in that client. Pure logic
+tests cover its positive filtering and tail. These are not live Hypixel tests.
+Still verify on the server:
 
 - Live Thunder nametag/entity pairing, aiming, multiple nearby Thunder, packet gaps,
   radius exit/reentry, wand cooldowns and normal camera/slot restoration.
@@ -105,3 +166,14 @@ live Hypixel test. Before relying on the automation in game, verify:
   missing items and Thunder interrupting recovery.
 - Cancellation on menus, death, option disable, toggle and world changes; existing
   pet, flare, Hoppity, Grinch and movement behavior under real server timing.
+- Muting with a real SkyBlock sidebar, live Thunder sounds and the 65-second tail.
+
+## License
+
+This combined version is distributed under **GPL-3.0-only** because it incorporates
+the FishyAddons sound filter. The complete license is in `LICENSE`. The original
+FuschenAddons CC0 dedication is preserved in
+`src/main/resources/licenses/FuschenAddons-original-CC0.txt`; the Feesh Apache-2.0
+and Cascade BSD-3-Clause notices remain intact. Complete buildable source, including
+Gradle scripts and tests, is available from this repository and the source ZIP
+delivered alongside the JAR.

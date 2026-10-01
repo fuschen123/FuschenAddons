@@ -54,6 +54,7 @@ public class Config {
 
     /** Interrupt fishing for the Ice Spray / Ink Wand / Hyperion Thunder response. */
     public boolean thunderResponseEnabled = false;
+    public boolean thunderMuterEnabled = false;
 
     public boolean seaCreatureHealthbarEnabled = true;
     public double healthbarX = .5;

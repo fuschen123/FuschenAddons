@@ -76,13 +76,16 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                 }
             }
             Tab.THUNDER -> {
+                toggle("Thunder Muter", "Mute lightning/guardian sounds in SkyBlock; independent of FishHelper", { config.thunderMuterEnabled }) {
+                    config.thunderMuterEnabled = it
+                }
                 toggle("Thunder response", "Interrupt fishing when your Thunder spawn message appears", { config.thunderResponseEnabled }) {
                     config.thunderResponseEnabled = it
                 }
                 info("01  Aim and freeze", "Face Thunder; use Ice Spray Wand if it is in your hotbar.")
                 info("02  Ink Wand", "Keep aiming at Thunder and use Ink Wand if available.")
                 info("03  Hyperion", "Look down; use at 5 CPS within 5 blocks. Wait outside range until all tracked Thunder are gone.")
-                info("Return to fishing", "Restore your view and slot when finished. Menus or disabling the option pause fishing.")
+                info("Return to fishing", "Restore your view and slot. Temporary interruptions resume automatically.")
             }
             Tab.GENERAL -> {
                 toggle("Sea Creature healthbar", "Show HP from creature nametags; keep the nearest target until it leaves", { config.seaCreatureHealthbarEnabled }) {
@@ -283,7 +286,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
             val y = panelY + 79 + index * rowHeight
             graphics.roundedRectangle((panelX + 12).toFloat(), y.toFloat(), (panelWidth - 24).toFloat(), 39f, 0xFF1B2536.toInt(), CascadeGeometricRadius(6f))
             graphics.nextStratum()
-            val textWidth = if (tab == Tab.THUNDER && scroll + index > 0) panelWidth - 44 else panelWidth - min(128, panelWidth / 3) - 56
+            val textWidth = if (tab == Tab.THUNDER && scroll + index > 1) panelWidth - 44 else panelWidth - min(128, panelWidth / 3) - 56
             drawText(graphics, ellipsize(row.title, textWidth, 11), panelX + 22, y + 5, TEXT, 11)
             val detail = ellipsize(row.detail, textWidth, 9)
             drawText(graphics, detail, panelX + 22, y + 23, MUTED, 9)

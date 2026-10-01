@@ -6,8 +6,9 @@
   "description": "Client-side fishing helper and SkyBlock utilities.",
   "icon": "icon.png",
   "authors": ["you"],
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "environment": "client",
+  "mixins": [{ "config": "fuschenaddons.client.mixins.json", "environment": "client" }],
   "entrypoints": {
     "client": ["com.FishHelper.FishHelperClient"]
   },

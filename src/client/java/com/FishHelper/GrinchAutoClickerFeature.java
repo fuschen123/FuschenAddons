@@ -44,7 +44,7 @@ final class GrinchAutoClickerFeature {
         nextClickAt = now + Math.max(1L, Math.round(intervalMs));
     }
 
-    private static void reset() {
+    static void reset() {
         clickTargetUuid = null;
         nextClickAt = 0;
     }

@@ -81,7 +81,7 @@ jar {
 	from("THIRD_PARTY_NOTICES.md")
 }
 
-tasks.named('sourcesJar') { from('THIRD_PARTY_NOTICES.md') }
+tasks.named('sourcesJar') { from('LICENSE', 'THIRD_PARTY_NOTICES.md') }
 
 // configure the maven publication
 publishing {

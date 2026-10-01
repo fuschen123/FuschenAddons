@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "com.FishHelper.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["ThunderSoundMixin"],
+  "injectors": { "defaultRequire": 1 }
+}
