@@ -1,0 +1,95 @@
+# Adapted from Feesh 1.14.0 SeaCreatureNames and HpTrackableSeaCreatureTypes (Apache-2.0).
+Water Hydra
+Carrot King
+Squid
+Night Squid
+Sea Walker
+Sea Guardian
+Sea Witch
+Sea Archer
+Rider of the Deep
+Catfish
+Sea Leech
+Guardian Defender
+Deep Sea Protector
+Agarimoo
+Inkling
+Manta Ray
+Frog Man
+Snapping Turtle
+Blue Ringed Octopus
+Wiki Tiki
+Great White Shark
+Nurse Shark
+Blue Shark
+Tiger Shark
+Reindrake
+Yeti
+Nutcracker
+Frozen Steve
+Frosty
+Grinch
+Phantom Fisher
+Grim Reaper
+Scarecrow
+Nightmare
+Werewolf
+Jumpin' Jack
+Fried Chicken
+Fireproof Witch
+Magma Slug
+Moogma
+Lava Leech
+Pyroclastic Worm
+Lava Flame
+Fire Eel
+Taurus
+Volcanic Snail
+Magma Pillar
+Fiery Scuttler
+Thunder
+Lord Jawbus
+Plhlegblast
+Ragnarok
+Oasis Rabbit
+Oasis Sheep
+Abyssal Miner
+Water Worm
+Poisoned Water Worm
+Flaming Worm
+Lava Blaze
+Lava Pigman
+Small Mithril Grubber
+Medium Mithril Grubber
+Large Mithril Grubber
+Bloated Mithril Grubber
+Trash Gobbler
+Dumpster Diver
+Banshee
+Bayou Sludge
+Alligator
+Titanoboa
+Nessie
+The Loch Emperor
+Bogged
+Tadgang
+Ent
+Wetwing
+Stridersurfer
+Atoll Croaker
+Lotus Guardian
+Drowned Captain
+gorF
+Puddle Jumper
+Frog Prince
+Haggard
+Brineling
+Sprawl
+Torrid
+Silkbreeze
+Giant Isopod
+Vanquisher
+Flipflopper
+Seashine
+Jawbus Follower
+Wiki Tiki Laser Totem

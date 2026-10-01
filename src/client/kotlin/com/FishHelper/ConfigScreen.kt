@@ -12,7 +12,9 @@ import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.components.Tooltip
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.KeyEvent
+import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.network.chat.Component
+import org.lwjgl.glfw.GLFW
 import kotlin.math.max
 import kotlin.math.min
 
@@ -33,6 +35,9 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
     private var panelHeight = 0
     private var visibleRows = 1
     private val rowHeight = 43
+    private data class Dropdown(val owner: CascadeButton, val labels: List<String>, val choose: (Int) -> Unit,
+                                var highlighted: Int, var offset: Int = 0)
+    private var dropdown: Dropdown? = null
 
     override fun init() {
         panelWidth = min(600, width - 20)
@@ -44,20 +49,21 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
     }
 
     private fun rebuild() {
+        dropdown = null
         clearWidgets()
         keyButton = null
         rows.clear()
         val config = Config.INSTANCE
         when (tab) {
             Tab.FISHING -> {
-                choice("Action weapon", "Weapon used after a catch", { config.actionWeapon.displayName }) {
-                    config.actionWeapon = config.actionWeapon.next()
+                choice("Action weapon", "Weapon used after a catch", Config.ActionWeapon.values().map { it.displayName }, { config.actionWeapon.ordinal }) {
+                    config.actionWeapon = Config.ActionWeapon.values()[it]
                 }
-                choice("Flare", "Place when no nearby flare or Plasmaflux is active", { config.flareTier.displayName }) {
-                    config.flareTier = config.flareTier.next()
+                choice("Flare", "Place when no nearby flare or Plasmaflux is active", Config.FlareTier.values().map { it.displayName }, { config.flareTier.ordinal }) {
+                    config.flareTier = Config.FlareTier.values()[it]
                 }
-                choice("Fishing pet", "Position in the Pets menu (1–7)", { "Pet ${config.petNumber}" }) {
-                    config.petNumber = config.petNumber % 7 + 1
+                choice("Fishing pet", "Position in the Pets menu (1–7)", (1..7).map { "Pet $it" }, { config.petNumber - 1 }) {
+                    config.petNumber = it + 1
                 }
                 toggle("Slugfish timing", "Wait 10 seconds, adjusted for your ping", { config.slugfishReelEnabled }) {
                     config.slugfishReelEnabled = it
@@ -75,10 +81,16 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                 }
                 info("01  Aim and freeze", "Face Thunder; use Ice Spray Wand if it is in your hotbar.")
                 info("02  Ink Wand", "Keep aiming at Thunder and use Ink Wand if available.")
-                info("03  Hyperion", "Look down; right-click 5 times/sec while an Elder Guardian is within 5 blocks.")
+                info("03  Hyperion", "Look down; use at 5 CPS within 5 blocks. Wait outside range until all tracked Thunder are gone.")
                 info("Return to fishing", "Restore your view and slot when finished. Menus or disabling the option pause fishing.")
             }
             Tab.GENERAL -> {
+                toggle("Sea Creature healthbar", "Show HP from creature nametags; keep the nearest target until it leaves", { config.seaCreatureHealthbarEnabled }) {
+                    config.seaCreatureHealthbarEnabled = it
+                }
+                rows += Row("Healthbar position", "Drag the preview to move it · /fa gui") { x, y, w ->
+                    button(x, y, w, "Edit HUD") { minecraft.setScreen(HudEditorScreen(this)) }
+                }
                 rows += Row("Start / stop key", "Click to bind a keyboard key; Escape cancels") { x, y, w ->
                     keyButton = button(x, y, w, keyLabel()) {
                         listeningForKey = true
@@ -133,14 +145,46 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
         }
     }
 
-    private fun choice(title: String, detail: String, get: () -> String, next: () -> Unit) {
+    private fun choice(title: String, detail: String, labels: List<String>, get: () -> Int, set: (Int) -> Unit) {
         rows += Row(title, detail) { x, y, w ->
-            button(x, y, w, get()) { current ->
-                next()
-                Config.save()
-                current.message = Component.literal(get())
+            button(x, y, w, "${labels[get()]} ▾") { current ->
+                listeningForKey = false
+                dropdown = Dropdown(current, labels, { index ->
+                    set(index)
+                    Config.save()
+                    current.message = Component.literal("${labels[index]} ▾")
+                }, get())
+                revealDropdownSelection()
             }.setTooltip(Tooltip.create(Component.literal("$title: $detail")))
         }
+    }
+
+    private fun dropdownLayout(menu: Dropdown) = DropdownLayout.place(width, height, menu.owner.x, menu.owner.y,
+        menu.owner.width, menu.owner.height, menu.labels.size)
+
+    private fun revealDropdownSelection() {
+        val menu = dropdown ?: return
+        val visible = dropdownLayout(menu).visibleRows()
+        menu.offset = menu.offset.coerceIn(max(0, menu.highlighted - visible + 1), menu.highlighted)
+            .coerceIn(0, max(0, menu.labels.size - visible))
+    }
+
+    private fun selectDropdown(index: Int) {
+        val menu = dropdown ?: return
+        menu.choose(index)
+        dropdown = null
+        setFocused(menu.owner)
+    }
+
+    override fun mouseClicked(event: MouseButtonEvent, isDoubleClick: Boolean): Boolean {
+        val menu = dropdown
+        if (menu != null) {
+            val row = dropdownLayout(menu).rowAt(event.x(), event.y())
+            if (event.button() == 0 && row >= 0) selectDropdown(menu.offset + row)
+            else dropdown = null
+            return true // Closing the popup must not activate a control underneath it.
+        }
+        return super.mouseClicked(event, isDoubleClick)
     }
 
     private fun info(title: String, detail: String) {
@@ -177,6 +221,19 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
     private fun keyLabel() = if (listeningForKey) "Press a key..." else toggleKey.translatedKeyMessage.string
 
     override fun keyPressed(event: KeyEvent): Boolean {
+        dropdown?.let { menu ->
+            when (event.key()) {
+                GLFW.GLFW_KEY_ESCAPE -> dropdown = null
+                GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> selectDropdown(menu.highlighted)
+                GLFW.GLFW_KEY_UP -> menu.highlighted = max(0, menu.highlighted - 1)
+                GLFW.GLFW_KEY_DOWN -> menu.highlighted = min(menu.labels.lastIndex, menu.highlighted + 1)
+                GLFW.GLFW_KEY_HOME -> menu.highlighted = 0
+                GLFW.GLFW_KEY_END -> menu.highlighted = menu.labels.lastIndex
+                GLFW.GLFW_KEY_TAB -> { dropdown = null; return super.keyPressed(event) }
+            }
+            revealDropdownSelection()
+            return true
+        }
         if (listeningForKey) {
             if (event.key() != InputConstants.KEY_ESCAPE) {
                 Config.INSTANCE.toggleKeyCode = event.key()
@@ -201,6 +258,12 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
     }
 
     override fun mouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean {
+        dropdown?.let { menu ->
+            val visible = dropdownLayout(menu).visibleRows()
+            if (scrollY != 0.0) menu.offset = (menu.offset + if (scrollY > 0) -1 else 1).coerceIn(0, max(0, menu.labels.size - visible))
+            menu.highlighted = menu.highlighted.coerceIn(menu.offset, min(menu.labels.lastIndex, menu.offset + visible - 1))
+            return true
+        }
         if (mouseX >= panelX && mouseX <= panelX + panelWidth && mouseY >= panelY + 79 && mouseY < panelY + panelHeight - 40) {
             if (scrollY != 0.0) moveScroll(if (scrollY > 0) -1 else 1)
             return true
@@ -224,7 +287,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
             drawText(graphics, ellipsize(row.title, textWidth, 11), panelX + 22, y + 5, TEXT, 11)
             val detail = ellipsize(row.detail, textWidth, 9)
             drawText(graphics, detail, panelX + 22, y + 23, MUTED, 9)
-            if (mouseX >= panelX + 12 && mouseX < panelX + panelWidth - 12 && mouseY >= y && mouseY < y + 39) {
+            if (dropdown == null && mouseX >= panelX + 12 && mouseX < panelX + panelWidth - 12 && mouseY >= y && mouseY < y + 39) {
                 graphics.setTooltipForNextFrame(Component.literal(row.detail), mouseX, mouseY)
             }
         }
@@ -232,10 +295,36 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
         val footer = if (panelWidth < 420) "Saved · ${scroll + 1}–$last/${rows.size}" else "${scroll + 1}–$last / ${rows.size} · Saved automatically"
         drawText(graphics, footer, panelX + 82, panelY + panelHeight - 26, MUTED, 9)
         graphics.nextStratum()
-        super.extractRenderState(graphics, mouseX, mouseY, delta)
+        super.extractRenderState(graphics, if (dropdown == null) mouseX else -1, if (dropdown == null) mouseY else -1, delta)
+        dropdown?.let { menu ->
+            val box = dropdownLayout(menu)
+            graphics.nextStratum()
+            graphics.roundedRectangle(box.x().toFloat(), box.y().toFloat(), box.width().toFloat(), box.height().toFloat(), 0xFF354761.toInt(), CascadeGeometricRadius(5f))
+            graphics.nextStratum()
+            val hovered = box.rowAt(mouseX.toDouble(), mouseY.toDouble())
+            repeat(box.visibleRows()) { row ->
+                val index = menu.offset + row
+                val y = box.y() + DropdownLayout.PADDING + row * DropdownLayout.ROW_HEIGHT
+                if (row == hovered || index == menu.highlighted) {
+                    graphics.roundedRectangle((box.x() + 3).toFloat(), y.toFloat(), (box.width() - 6).toFloat(), DropdownLayout.ROW_HEIGHT.toFloat(), 0xFF245D69.toInt(), CascadeGeometricRadius(3f))
+                    graphics.nextStratum()
+                }
+                drawText(graphics, ellipsize(menu.labels[index], box.width() - 18, 11), box.x() + 8, y + 4, TEXT, 11)
+            }
+            if (menu.labels.size > box.visibleRows()) {
+                val track = (box.height() - 2 * DropdownLayout.PADDING).toFloat()
+                val thumb = track * box.visibleRows() / menu.labels.size
+                val thumbY = box.y() + DropdownLayout.PADDING + (track - thumb) * menu.offset / (menu.labels.size - box.visibleRows())
+                graphics.nextStratum()
+                graphics.roundedRectangle((box.x() + box.width() - 6).toFloat(), (box.y() + DropdownLayout.PADDING).toFloat(), 3f, track, 0xFF1B2536.toInt(), CascadeGeometricRadius(1.5f))
+                graphics.nextStratum()
+                graphics.roundedRectangle((box.x() + box.width() - 6).toFloat(), thumbY, 3f, thumb, ACCENT, CascadeGeometricRadius(1.5f))
+            }
+        }
     }
 
     override fun onClose() {
+        dropdown = null
         listeningForKey = false
         Config.save()
         minecraft.setScreen(parent)

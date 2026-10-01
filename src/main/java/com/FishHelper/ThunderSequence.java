@@ -9,7 +9,8 @@ public final class ThunderSequence {
         boolean aimAtThunder();
         boolean select(Item item);
         boolean use(Item item);
-        boolean hasNearbyElderGuardian();
+        boolean hasLivingThunder();
+        boolean hasThunderInAttackRange();
         void lookDown();
     }
 
@@ -17,6 +18,7 @@ public final class ThunderSequence {
     private Stage stage = Stage.FIND;
     private int waitTicks;
     private int searchTicks;
+    private boolean aborted;
 
     /** Five blocks in 3D, inclusive, rather than a ten-block-wide cube. */
     public static boolean inAttackRange(double distanceSquared) {
@@ -28,15 +30,16 @@ public final class ThunderSequence {
     }
 
     public void cancel() {
+        aborted = true;
         stage = Stage.DONE;
     }
 
+    public boolean aborted() { return aborted; }
+
     public void tick(Controls controls) {
         if (!active()) return;
-        // Check every tick, including the delay between clicks: no extra click after it leaves.
-        if ((stage == Stage.HYPERION_SELECT || stage == Stage.HYPERION_USE)
-                && !controls.hasNearbyElderGuardian()) {
-            cancel();
+        if (stage != Stage.FIND && !controls.hasLivingThunder()) {
+            stage = Stage.DONE;
             return;
         }
         if (waitTicks > 0 && --waitTicks > 0) return;
@@ -61,6 +64,8 @@ public final class ThunderSequence {
             }
             case HYPERION_USE -> {
                 controls.lookDown();
+                // Leaving five blocks pauses attacks, not the encounter. Identity memory handles gaps.
+                if (!controls.hasThunderInAttackRange()) return;
                 if (!controls.use(Item.HYPERION)) cancel();
                 waitTicks = 4; // 5 right clicks per second at 20 TPS.
             }
@@ -70,7 +75,6 @@ public final class ThunderSequence {
 
     private void selectWand(Controls controls, Item item, Stage use, Stage next) {
         if (!controls.aimAtThunder()) {
-            cancel();
             return;
         }
         stage = controls.select(item) ? use : next;
@@ -79,7 +83,6 @@ public final class ThunderSequence {
 
     private void useWand(Controls controls, Item item, Stage next) {
         if (!controls.aimAtThunder()) {
-            cancel();
             return;
         }
         // Revalidate the selected stack: an item moved during the swap must not be used.

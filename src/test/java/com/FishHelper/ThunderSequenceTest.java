@@ -28,7 +28,8 @@ class ThunderSequenceTest {
             used.add(item);
             return true;
         }
-        public boolean hasNearbyElderGuardian() { return nearby; }
+        public boolean hasLivingThunder() { return alive; }
+        public boolean hasThunderInAttackRange() { return nearby; }
         public void lookDown() { down = true; }
     }
 
@@ -69,12 +70,13 @@ class ThunderSequenceTest {
         assertTrue(c.used.stream().allMatch(i -> i == HYPERION));
     }
 
-    @Test void noHyperionCompletesAfterWands() {
+    @Test void noHyperionAbortsAfterWands() {
         var s = new ThunderSequence(); var c = new Controls();
         c.items.remove(HYPERION);
         ticks(s, c, 30);
         assertEquals(List.of(ICE_SPRAY, INK_WAND), c.used);
         assertFalse(s.active());
+        assertTrue(s.aborted());
     }
 
     @Test void missingSpawnTimesOutWithoutUsingAnything() {
@@ -95,11 +97,15 @@ class ThunderSequenceTest {
         assertTrue(c.used.isEmpty()); assertFalse(s.active());
     }
 
-    @Test void leavingRangeStopsImmediatelyEvenDuringClickDelay() {
+    @Test void leavingRangePausesAndReentryResumesAtFiveCps() {
         var s = new ThunderSequence(); var c = new Controls();
         untilHyperion(s, c);
         int count = c.used.size(); c.nearby = false; s.tick(c);
-        assertFalse(s.active()); ticks(s, c, 20); assertEquals(count, c.used.size());
+        assertTrue(s.active()); ticks(s, c, 200); assertEquals(count, c.used.size());
+        c.nearby = true; s.tick(c); assertEquals(count + 1, c.used.size());
+        ticks(s, c, 3); assertEquals(count + 1, c.used.size());
+        s.tick(c); assertEquals(count + 2, c.used.size());
+        c.alive = false; s.tick(c); assertFalse(s.active()); assertFalse(s.aborted());
     }
 
     @Test void guardiansOutsideRadiusPreventHyperion() {

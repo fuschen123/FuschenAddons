@@ -55,6 +55,10 @@ public class Config {
     /** Interrupt fishing for the Ice Spray / Ink Wand / Hyperion Thunder response. */
     public boolean thunderResponseEnabled = false;
 
+    public boolean seaCreatureHealthbarEnabled = true;
+    public double healthbarX = .5;
+    public double healthbarY = .12;
+
     public enum FlareTier {
         NONE("None", ""),
         WARNING("Warning Flare", "warning flare"),
@@ -105,6 +109,10 @@ public class Config {
                     if (INSTANCE.actionWeapon == null) {
                         INSTANCE.actionWeapon = ActionWeapon.HYPERION;
                     }
+                    if (INSTANCE.flareTier == null) INSTANCE.flareTier = FlareTier.SOS;
+                    HudPosition position = new HudPosition(INSTANCE.healthbarX, INSTANCE.healthbarY);
+                    INSTANCE.healthbarX = position.x();
+                    INSTANCE.healthbarY = position.y();
                     INSTANCE.petNumber = Math.max(1, Math.min(7, INSTANCE.petNumber));
                     INSTANCE.reelPingMs = Math.max(0, Math.min(5000, INSTANCE.reelPingMs));
                     INSTANCE.grinchClickCps = Math.max(3.0, Math.min(15.0, INSTANCE.grinchClickCps));

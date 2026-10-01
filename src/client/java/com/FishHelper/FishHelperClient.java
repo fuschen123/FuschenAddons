@@ -19,7 +19,6 @@ import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ArmorStand;
-import net.minecraft.world.entity.monster.MagmaCube;
 import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
@@ -64,11 +63,11 @@ public class FishHelperClient implements ClientModInitializer {
     private static int recastCheckTimer = 8 * 20;
     private static int flarePlacementCooldown = 0;
     private static boolean sosFlarePending = false;
-    private static int fishingAction = -1; // -1 idle; 0-6 bite/pet sequence; 7-9 magma-cube recovery
+    private static int fishingAction = -1; // -1 idle; 0-6 bite/pet sequence; 11-13 flare placement
     private static int actionTimer = 0;
     private static int petMenuWaitTicks = 0;
     private static int petMenuStableTicks = 0;
-    private static int handledMagmaCubeId = -1;
+
     private static InteractionHand rodHandForAction;
     private static int rodSelectedSlotForAction = -1;
     private static int actionWeaponSlotForAction = -1;
@@ -83,10 +82,13 @@ public class FishHelperClient implements ClientModInitializer {
     private static int hotspotRadarSlot = -1;
     private static int hotspotRadarRestoreSlot = -1;
     private static ThunderResponseFeature thunderResponse;
+    private static HookRecoveryFeature hookRecovery;
+    private static final HookEncounterGuard HOOK_ENCOUNTERS = new HookEncounterGuard();
 
     @Override
     public void onInitializeClient() {
         Config.load();
+        SeaCreatureHud.initialize();
         RandomMovementFeature.initialize();
 
         TOGGLE_KEY = KeyMappingHelper.registerKeyMapping(
@@ -106,18 +108,7 @@ public class FishHelperClient implements ClientModInitializer {
                 )
         );
 
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            dispatcher.register(ClientCommands.literal("fuschen")
-                    .executes(context -> {
-                        openConfigMenu();
-                        return 1;
-                    }));
-            dispatcher.register(ClientCommands.literal("fa")
-                    .executes(context -> {
-                        openConfigMenu();
-                        return 1;
-                    }));
-        });
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> registerCommands(dispatcher));
 
         ClientEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
             LocalPlayer player = Minecraft.getInstance().player;
@@ -138,7 +129,7 @@ public class FishHelperClient implements ClientModInitializer {
             String plainMessage = message.getString().replaceAll("(?i)§[0-9A-FK-OR]", "").strip();
 
             if (enabled && client.player != null) {
-                if (thunderResponse == null && !hoppityAwaitingYes && !hoppityAwaitingWindow
+                if (thunderResponse == null && hookRecovery == null && !hoppityAwaitingYes && !hoppityAwaitingWindow
                         && isHoppityRingMessage(plainMessage)) {
                     String pickupCommand = findClickableCommand(message, "PICK UP");
                     if (pickupCommand != null) {
@@ -164,15 +155,19 @@ public class FishHelperClient implements ClientModInitializer {
             }
 
             if (enabled && !paused && thunderResponse == null && STOP_MESSAGES.contains(plainMessage)) {
+                finishHookRecovery();
                 switchToActionWeaponForRareCreature(client.player);
             }
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            SeaCreatureTracker.INSTANCE.tick(client);
             if (!worldLevelObservationInitialized) {
                 observedWorldLevel = client.level;
                 worldLevelObservationInitialized = true;
             } else if (observedWorldLevel != client.level) {
+                finishHookRecovery();
+                HOOK_ENCOUNTERS.clear();
                 observedWorldLevel = client.level;
                 if (enabled) {
                     pauseForWorldChange(client.player);
@@ -187,6 +182,7 @@ public class FishHelperClient implements ClientModInitializer {
             }
 
             while (TOGGLE_KEY.consumeClick()) {
+                finishHookRecovery();
                 finishThunderResponse();
                 if (hotspotRadarStage > 0 && client.player != null && hotspotRadarRestoreSlot >= 0) {
                     client.player.getInventory().setSelectedSlot(hotspotRadarRestoreSlot);
@@ -209,7 +205,7 @@ public class FishHelperClient implements ClientModInitializer {
                 fishingAction = -1;
                 actionTimer = 0;
                 petMenuWaitTicks = 0;
-                handledMagmaCubeId = -1;
+
                 rodHandForAction = null;
                 rodSelectedSlotForAction = -1;
                 actionWeaponSlotForAction = -1;
@@ -238,11 +234,26 @@ public class FishHelperClient implements ClientModInitializer {
                                 STATUS_PREFIX + " §ePAUSED (Thunder response cancelled; use the fishing toggle to resume)"));
                     }
                 } else if (!thunderResponse.tick()) {
+                    boolean aborted = thunderResponse.aborted();
                     finishThunderResponse();
+                    paused = aborted;
                     client.player.sendSystemMessage(Component.literal(
-                            STATUS_PREFIX + " §bThunder response finished; resuming fishing"));
+                            STATUS_PREFIX + (aborted ? " §ePAUSED (Thunder target or Hyperion unavailable; use the fishing toggle to resume)"
+                                    : " §bThunder response finished; resuming fishing")));
                 }
                 return; // No fishing, pet, flare, radar or Grinch input in a Thunder tick.
+            }
+
+            if (hookRecovery != null) {
+                boolean cancelled = !enabled || paused || !hookRecovery.canContinue();
+                if (cancelled || !hookRecovery.tick()) {
+                    boolean aborted = cancelled || hookRecovery.aborted();
+                    finishHookRecovery();
+                    paused = enabled && aborted;
+                    if (paused && client.player != null) client.player.sendSystemMessage(Component.literal(
+                            STATUS_PREFIX + " §ePAUSED (hook recovery cancelled, item missing or hook not released; toggle to resume)"));
+                }
+                return;
             }
 
             if (hoppityAwaitingWindow
@@ -353,6 +364,18 @@ public class FishHelperClient implements ClientModInitializer {
                 flarePlacementCooldown--;
             }
             FishingHook activeBobber = findOwnedBobber(client, player);
+            if (client.screen == null && HookRecoveryFeature.isBlockingMob(activeBobber, player)) {
+                if (HOOK_ENCOUNTERS.claim(activeBobber.getUUID(), activeBobber.getHookedIn().getUUID())) {
+                    hookRecovery = new HookRecoveryFeature(client, activeBobber, rodSelectedSlotForAction, rodHandForAction);
+                    finishFishingAction();
+                    sosFlarePending = false;
+                } else {
+                    // A hook that survived recovery is not another catch. Preserve Grinch left clicks,
+                    // but suppress normal right-click/recast timers for this consumed encounter.
+                    GrinchAutoClickerFeature.tick(client, player, activeBobber.getHookedIn());
+                }
+                return;
+            }
             trackHotspot(client, player, activeBobber);
             boolean bobberPresent = activeBobber != null;
             boolean newBobber = bobberPresent && !activeBobber.getUUID().equals(trackedBobberUuid);
@@ -383,31 +406,7 @@ public class FishHelperClient implements ClientModInitializer {
             }
 
             Entity hookedEntity = activeBobber == null ? null : activeBobber.getHookedIn();
-            if (WaterSnakeRecastFeature.tick(client, player, activeBobber, fishingAction >= 0)) {
-                return;
-            }
             GrinchAutoClickerFeature.tick(client, player, hookedEntity);
-            if (!(hookedEntity instanceof MagmaCube)) {
-                handledMagmaCubeId = -1;
-            } else if (fishingAction < 0 && activeBobber != null
-                    && handledMagmaCubeId != hookedEntity.getId()) {
-                handledMagmaCubeId = hookedEntity.getId();
-                InteractionHand heldRodHand = player.getMainHandItem().is(Items.FISHING_ROD)
-                        ? InteractionHand.MAIN_HAND
-                        : player.getOffhandItem().is(Items.FISHING_ROD) ? InteractionHand.OFF_HAND : null;
-                int hypSlot = findActionWeaponHotbarSlot(player);
-                if (heldRodHand != null && hypSlot >= 0) {
-                    rodHandForAction = heldRodHand;
-                    rodSelectedSlotForAction = player.getInventory().getSelectedSlot();
-                    actionWeaponSlotForAction = hypSlot;
-                    fishingAction = 7;
-                    actionTimer = 4; // the action timer is decremented later in this same tick
-                } else if (Config.INSTANCE.actionWeapon != Config.ActionWeapon.NONE) {
-                    player.sendSystemMessage(Component.literal(
-                            STATUS_PREFIX + " magma-cube recovery skipped (rod or selected action weapon not found)"));
-                }
-            }
-
             // Finish an active bite sequence before checking the currently held item.
             // During this sequence the main hand intentionally holds the selected action weapon.
             if (fishingAction >= 0) {
@@ -463,32 +462,6 @@ public class FishHelperClient implements ClientModInitializer {
                     fishingAction = 6;
                     actionTimer = ThreadLocalRandom.current().nextInt(2, 4);
                     petMenuStableTicks = 0;
-                } else if (fishingAction == 7) {
-                    if (activeBobber == null || !(activeBobber.getHookedIn() instanceof MagmaCube)) {
-                        finishFishingAction();
-                    } else {
-                        player.getInventory().setSelectedSlot(actionWeaponSlotForAction);
-                        fishingAction = 8;
-                        actionTimer = randomSwapDelayTicks();
-                    }
-                } else if (fishingAction == 8) {
-                    client.gameMode.useItem(player, InteractionHand.MAIN_HAND);
-                    sosFlarePending = true;
-                    fishingAction = 9;
-                    actionTimer = randomSwapDelayTicks();
-                } else if (fishingAction == 9) {
-                    if (rodSelectedSlotForAction >= 0) {
-                        player.getInventory().setSelectedSlot(rodSelectedSlotForAction);
-                    }
-                    fishingAction = 10;
-                    actionTimer = randomSwapDelayTicks();
-                } else if (fishingAction == 10) {
-                    // Switching to the action weapon removes the old bobber; cast directly again.
-                    client.gameMode.useItem(player, rodHandForAction);
-                    player.swing(rodHandForAction);
-                    bobberWasActive = true;
-                    bobberTrackingInitialized = true;
-                    finishFishingAction();
                 } else if (fishingAction == 11) {
                     player.getInventory().setSelectedSlot(actionWeaponSlotForAction);
                     fishingAction = 12;
@@ -655,13 +628,14 @@ public class FishHelperClient implements ClientModInitializer {
                     && isPetsMenu(screen.getTitle().getString())) client.setScreen(null);
             else return;
         }
+        finishHookRecovery(); // Restores the rod slot before Thunder takes its snapshot.
         int restoreSlot = rodSelectedSlotForAction >= 0 ? rodSelectedSlotForAction
                 : hotspotRadarRestoreSlot >= 0 ? hotspotRadarRestoreSlot
                 : client.player.getInventory().getSelectedSlot();
         FishingHook bobber = findOwnedBobber(client, client.player);
         var origin = bobber == null ? client.player.position() : bobber.position();
         finishFishingAction();
-        WaterSnakeRecastFeature.reset();
+
         sosFlarePending = false;
         hotspotRadarStage = 0;
         hotspotRadarTimer = 0;
@@ -681,6 +655,18 @@ public class FishHelperClient implements ClientModInitializer {
         bobberActiveTicks = 0;
         trackedBobberUuid = null;
         recastCheckTimer = 4;
+    }
+
+    private static void finishHookRecovery() {
+        if (hookRecovery == null) return;
+        hookRecovery.finish();
+        hookRecovery = null;
+        finishFishingAction();
+        trackedBobberUuid = null;
+        bobberTrackingInitialized = false;
+        bobberWasActive = false;
+        bobberActiveTicks = 0;
+        biteAlertHandled = false;
     }
 
     private static boolean isHoppityRingMessage(String message) {
@@ -795,7 +781,7 @@ public class FishHelperClient implements ClientModInitializer {
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
         actionWeaponSlotForAction = -1;
-        handledMagmaCubeId = -1;
+
 
         sendChatClickCommand(player, pickupCommand);
         player.sendSystemMessage(Component.literal(STATUS_PREFIX + " §eHoppity call picked up; fishing paused for 10 seconds"));
@@ -934,7 +920,7 @@ public class FishHelperClient implements ClientModInitializer {
         }
     }
 
-    private static FishingHook findOwnedBobber(net.minecraft.client.Minecraft client, LocalPlayer player) {
+    static FishingHook findOwnedBobber(net.minecraft.client.Minecraft client, LocalPlayer player) {
         for (Entity entity : client.level.entitiesForRendering()) {
             if (entity instanceof FishingHook hook
                     && hook.getPlayerOwner() == player
@@ -972,7 +958,7 @@ public class FishHelperClient implements ClientModInitializer {
         fishingAction = -1;
         actionTimer = 0;
         petMenuWaitTicks = 0;
-        handledMagmaCubeId = -1;
+
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
         actionWeaponSlotForAction = -1;
@@ -998,9 +984,31 @@ public class FishHelperClient implements ClientModInitializer {
         return title.matches("(?i)(?:\\(\\d+/\\d+\\)\\s*)?Pets");
     }
 
+    static void registerCommands(com.mojang.brigadier.CommandDispatcher<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource> dispatcher) {
+        for (String alias : java.util.List.of("fa", "fuschen")) {
+            dispatcher.register(ClientCommands.literal(alias)
+                    .then(ClientCommands.literal("gui").executes(context -> queueScreen(true)))
+                    .executes(context -> queueScreen(false)));
+        }
+    }
+
+    private static int queueScreen(boolean hud) {
+        // ChatScreen closes itself after submitting a command. Open after that close,
+        // including when already on the client thread (execute() would run immediately).
+        Minecraft.getInstance().schedule(() -> {
+            if (hud) openHudEditor(); else openConfigMenu();
+        });
+        return 1;
+    }
+
     private static void openConfigMenu() {
         Minecraft client = Minecraft.getInstance();
         client.setScreen(new ConfigScreen(client.screen, TOGGLE_KEY));
+    }
+
+    private static void openHudEditor() {
+        Minecraft client = Minecraft.getInstance();
+        client.setScreen(new HudEditorScreen(client.screen));
     }
 
     private static void pauseForWorldChange(LocalPlayer player) {
@@ -1022,7 +1030,7 @@ public class FishHelperClient implements ClientModInitializer {
         actionTimer = 0;
         petMenuWaitTicks = 0;
         petMenuStableTicks = 0;
-        handledMagmaCubeId = -1;
+
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
         actionWeaponSlotForAction = -1;
