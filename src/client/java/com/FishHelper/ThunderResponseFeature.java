@@ -10,6 +10,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Locale;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
 
 /** Owns camera and hotbar input only for the encounter started by Thunder's spawn message. */
 final class ThunderResponseFeature implements ThunderSequence.Controls {
@@ -23,6 +26,8 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
     private final Vec3 spawnOrigin;
     private final ThunderSequence sequence = new ThunderSequence();
     private ElderGuardian target;
+    private final Set<UUID> encounter = new HashSet<>();
+    private final SeaCreatureTracker tracker = SeaCreatureTracker.INSTANCE;
 
     ThunderResponseFeature(Minecraft client, int restoreSlot, Vec3 spawnOrigin) {
         this.client = client;
@@ -40,8 +45,20 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
     }
 
     boolean tick() {
+        collectEncounter();
         sequence.tick(this);
         return sequence.active();
+    }
+
+    boolean aborted() { return sequence.aborted(); }
+
+    private void collectEncounter() {
+        for (SeaCreatureMemory.Entry entry : tracker.creatures()) {
+            Entity mob = tracker.entity(entry);
+            if (entry.nametag().name().equals("Thunder") && mob instanceof ElderGuardian
+                    && mob.distanceToSqr(player) <= 32 * 32) encounter.add(entry.uuid());
+        }
+        encounter.removeIf(id -> tracker.get(id) == null);
     }
 
     void finish() {
@@ -57,13 +74,11 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
     @Override
     public boolean findThunder() {
         double bestScore = Double.MAX_VALUE;
-        for (Entity entity : level.entitiesForRendering()) {
-            if (!(entity instanceof ElderGuardian guardian) || !guardian.isAlive()
-                    || guardian.distanceToSqr(player) > 32 * 32) continue;
-            // Hypixel may put the name on a separate armor stand. Prefer a named mob,
-            // otherwise correlate the spawn message with the guardian closest to the cast.
+        target = null;
+        for (UUID id : encounter) {
+            SeaCreatureMemory.Entry entry = tracker.get(id);
+            if (entry == null || !(tracker.entity(entry) instanceof ElderGuardian guardian)) continue;
             double score = guardian.position().distanceToSqr(spawnOrigin);
-            if (guardian.getName().getString().toLowerCase(Locale.ROOT).contains("thunder")) score -= 4096;
             if (score < bestScore) {
                 target = guardian;
                 bestScore = score;
@@ -74,9 +89,7 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
 
     @Override
     public boolean aimAtThunder() {
-        if (target == null || !target.isAlive() || target.isRemoved() || target.distanceToSqr(player) > 32 * 32) {
-            return false;
-        }
+        if (!findThunder()) return false;
         Vec3 direction = target.getEyePosition().subtract(player.getEyePosition());
         player.setYRot((float) Math.toDegrees(Math.atan2(direction.z, direction.x)) - 90f);
         player.setXRot((float) -Math.toDegrees(Math.atan2(direction.y,
@@ -105,10 +118,14 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
     }
 
     @Override
-    public boolean hasNearbyElderGuardian() {
-        for (Entity entity : level.entitiesForRendering()) {
-            if (entity instanceof ElderGuardian && entity.isAlive() && !entity.isRemoved()
-                    && ThunderSequence.inAttackRange(entity.distanceToSqr(player))) return true;
+    public boolean hasLivingThunder() { return !encounter.isEmpty(); }
+
+    @Override
+    public boolean hasThunderInAttackRange() {
+        for (UUID id : encounter) {
+            SeaCreatureMemory.Entry entry = tracker.get(id);
+            Entity entity = entry == null ? null : tracker.entity(entry);
+            if (entity instanceof ElderGuardian && ThunderSequence.inAttackRange(entity.distanceToSqr(player))) return true;
         }
         return false;
     }
@@ -118,7 +135,7 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
         player.setXRot(90f);
     }
 
-    private static boolean matches(ItemStack stack, ThunderSequence.Item item) {
+    static boolean matches(ItemStack stack, ThunderSequence.Item item) {
         if (stack.isEmpty()) return false;
         String search = switch (item) {
             case ICE_SPRAY -> "ice spray wand";
