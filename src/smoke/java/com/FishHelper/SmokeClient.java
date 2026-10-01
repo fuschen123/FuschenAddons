@@ -22,8 +22,10 @@ public class SmokeClient implements ClientModInitializer {
     }
     static class TestHook extends net.minecraft.world.entity.projectile.FishingHook {
         boolean water;
+        net.minecraft.world.entity.Entity attached;
         TestHook(Minecraft c,int id) {super(net.minecraft.world.entity.EntityType.FISHING_BOBBER,c.level); setId(id); setOwner(c.player); setPos(c.player.position()); c.level.addEntity(this);}
         @Override public boolean isInWater() {return water;}
+        @Override public net.minecraft.world.entity.Entity getHookedIn() {return attached;}
     }
     void runtimeChecks(Minecraft c) throws Exception {
         var p=c.player; var inv=p.getInventory();
@@ -89,6 +91,7 @@ public class SmokeClient implements ClientModInitializer {
         check(!ThunderMuter.shouldClean(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.GUARDIAN_AMBIENT,1f)),"muter rejects non-SkyBlock even with living Thunder");
         c.level.removeEntity(label.getId(),net.minecraft.world.entity.Entity.RemovalReason.DISCARDED); c.level.removeEntity(guardian.getId(),net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
         check(net.minecraft.network.chat.Component.translatable("key.tsclient.toggle").getString().equals("Start/Stop FishHelper"),"renamed keybind");
+        JawbusSmokeChecks.run(this, c);
     }
     int ticks, step;
     ConfigScreen screen;
