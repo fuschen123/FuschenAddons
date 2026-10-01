@@ -30,6 +30,13 @@ final class WaterSnakeRecastFeature {
     private WaterSnakeRecastFeature() {
     }
 
+    static void reset() {
+        stage = 0;
+        timer = 0;
+        rodHand = null;
+        handledSnakeId = -1;
+    }
+
     /**
      * @return true while this feature is handling the tick, so other fishing actions
      *         do not issue rod or hotbar actions at the same time.

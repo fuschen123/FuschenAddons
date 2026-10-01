@@ -1,9 +1,11 @@
 plugins {
 	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'org.jetbrains.kotlin.jvm' version '2.4.10'
 	id 'maven-publish'
 }
 
 repositories {
+	maven { url = 'https://maven.starred.foo/releases' }
 	// Add repositories to retrieve artifacts from in here.
 	// You should only use this when depending on other mods because
 	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
@@ -23,6 +25,11 @@ loom {
 }
 
 dependencies {
+	implementation include("foo.starred:cascade:2026.09.7+26.1")
+	implementation include("net.fabricmc:fabric-language-kotlin:1.13.13+kotlin.2.4.10")
+	testImplementation platform('org.junit:junit-bom:5.11.4')
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
@@ -30,6 +37,9 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 }
+
+kotlin { jvmToolchain(25) }
+test { useJUnitPlatform() }
 
 processResources {
 	def version = project.version
