@@ -14,15 +14,13 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-/** Owns camera and hotbar input only for the encounter started by Thunder's spawn message. */
+/** Owns hotbar input only for the encounter started by Thunder's spawn message. */
 final class ThunderResponseFeature implements ThunderSequence.Controls {
     static final String SPAWN_MESSAGE = "You hear a massive rumble as Thunder emerges.";
     private final Minecraft client;
     private final LocalPlayer player;
     private final ClientLevel level;
     private final int restoreSlot;
-    private final float restoreYaw;
-    private final float restorePitch;
     private final Vec3 spawnOrigin;
     private final ThunderSequence sequence = new ThunderSequence();
     private ElderGuardian target;
@@ -34,8 +32,6 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
         this.player = client.player;
         this.level = client.level;
         this.restoreSlot = restoreSlot;
-        this.restoreYaw = player.getYRot();
-        this.restorePitch = player.getXRot();
         this.spawnOrigin = spawnOrigin;
     }
 
@@ -63,11 +59,9 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
 
     void finish() {
         sequence.cancel();
-        // Never apply an old world's camera/slot snapshot to a new player or level.
+        // Never apply an old world's hotbar snapshot to a new player or level.
         if (client.player == player && client.level == level) {
             player.getInventory().setSelectedSlot(restoreSlot);
-            player.setYRot(restoreYaw);
-            player.setXRot(restorePitch);
         }
     }
 
@@ -88,14 +82,7 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
     }
 
     @Override
-    public boolean aimAtThunder() {
-        if (!findThunder()) return false;
-        Vec3 direction = target.getEyePosition().subtract(player.getEyePosition());
-        player.setYRot((float) Math.toDegrees(Math.atan2(direction.z, direction.x)) - 90f);
-        player.setXRot((float) -Math.toDegrees(Math.atan2(direction.y,
-                Math.sqrt(direction.x * direction.x + direction.z * direction.z))));
-        return true;
-    }
+    public boolean hasThunderTarget() { return findThunder(); }
 
     @Override
     public boolean select(ThunderSequence.Item item) {
@@ -111,7 +98,7 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
     @Override
     public boolean use(ThunderSequence.Item item) {
         if (!matches(player.getMainHandItem(), item) || client.gameMode == null) return false;
-        // useItem synchronizes the selected slot and includes the player's current rotation.
+        // Synchronize the selected slot before using the selected item.
         client.gameMode.useItem(player, InteractionHand.MAIN_HAND);
         player.swing(InteractionHand.MAIN_HAND);
         return true;
@@ -128,11 +115,6 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
             if (entity instanceof ElderGuardian && ThunderSequence.inAttackRange(entity.distanceToSqr(player))) return true;
         }
         return false;
-    }
-
-    @Override
-    public void lookDown() {
-        player.setXRot(90f);
     }
 
     static boolean matches(ItemStack stack, ThunderSequence.Item item) {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.46
+
+### Changed
+
+- Remove all automatic camera aiming, downward looking, and view restoration from the Thunder response sequence. Target detection and item use continue without changing the camera.
+
 ## 0.0.42
 
 ### Fixed

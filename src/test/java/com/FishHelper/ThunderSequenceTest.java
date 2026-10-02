@@ -11,11 +11,11 @@ class ThunderSequenceTest {
     private static final class Controls implements ThunderSequence.Controls {
         final EnumSet<ThunderSequence.Item> items = EnumSet.allOf(ThunderSequence.Item.class);
         final List<ThunderSequence.Item> used = new ArrayList<>();
-        boolean found = true, alive = true, nearby = true, down;
+        boolean found = true, alive = true, nearby = true;
         ThunderSequence.Item selected;
-        int aims;
+        int targetChecks;
         public boolean findThunder() { return found; }
-        public boolean aimAtThunder() { aims++; return alive; }
+        public boolean hasThunderTarget() { targetChecks++; return alive; }
         public boolean select(ThunderSequence.Item item) {
             if (!items.contains(item)) return false;
             selected = item;
@@ -24,13 +24,11 @@ class ThunderSequenceTest {
         public boolean use(ThunderSequence.Item item) {
             assertEquals(selected, item, "Select the correct slot before using an item");
             if (!items.contains(item)) return false;
-            if (item == HYPERION) assertTrue(down, "Hyperion must aim at the floor");
             used.add(item);
             return true;
         }
         public boolean hasLivingThunder() { return alive; }
         public boolean hasThunderInAttackRange() { return nearby; }
-        public void lookDown() { down = true; }
     }
 
     private static void ticks(ThunderSequence sequence, Controls controls, int count) {
@@ -48,7 +46,7 @@ class ThunderSequenceTest {
         assertEquals(List.of(ICE_SPRAY, INK_WAND), c.used.subList(0, 2));
         assertTrue(c.used.subList(2, c.used.size()).stream().allMatch(i -> i == HYPERION));
         assertTrue(c.used.size() > 4);
-        assertEquals(4, c.aims);
+        assertEquals(4, c.targetChecks);
     }
 
     @Test void eachMissingWandIsSkippedIndependently() {

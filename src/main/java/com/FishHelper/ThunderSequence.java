@@ -6,12 +6,11 @@ public final class ThunderSequence {
 
     public interface Controls {
         boolean findThunder();
-        boolean aimAtThunder();
+        boolean hasThunderTarget();
         boolean select(Item item);
         boolean use(Item item);
         boolean hasLivingThunder();
         boolean hasThunderInAttackRange();
-        void lookDown();
     }
 
     private enum Stage { FIND, ICE_SELECT, ICE_USE, INK_SELECT, INK_USE, HYPERION_SELECT, HYPERION_USE, DONE }
@@ -58,12 +57,10 @@ public final class ThunderSequence {
                     cancel();
                     return;
                 }
-                controls.lookDown();
                 stage = Stage.HYPERION_USE;
                 waitTicks = 2;
             }
             case HYPERION_USE -> {
-                controls.lookDown();
                 // Leaving five blocks pauses attacks, not the encounter. Identity memory handles gaps.
                 if (!controls.hasThunderInAttackRange()) return;
                 if (!controls.use(Item.HYPERION)) cancel();
@@ -74,7 +71,7 @@ public final class ThunderSequence {
     }
 
     private void selectWand(Controls controls, Item item, Stage use, Stage next) {
-        if (!controls.aimAtThunder()) {
+        if (!controls.hasThunderTarget()) {
             return;
         }
         stage = controls.select(item) ? use : next;
@@ -82,7 +79,7 @@ public final class ThunderSequence {
     }
 
     private void useWand(Controls controls, Item item, Stage next) {
-        if (!controls.aimAtThunder()) {
+        if (!controls.hasThunderTarget()) {
             return;
         }
         // Revalidate the selected stack: an item moved during the swap must not be used.
