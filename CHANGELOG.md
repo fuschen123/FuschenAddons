@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.48
+
+### Changed
+
+- Keep the Pets menu open while checking the configured pet every second, retrying the equip click until the tooltip confirms it is equipped.
+
 ## 0.0.47
 
 ### Changed

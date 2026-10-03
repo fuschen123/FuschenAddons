@@ -70,7 +70,7 @@ public class FishHelperClient implements ClientModInitializer {
     private static int fishingAction = -1; // -1 idle; 0-6 bite/pet sequence; 11-13 flare placement
     private static int actionTimer = 0;
     private static int petMenuWaitTicks = 0;
-    private static int petMenuStableTicks = 0;
+    private static int petMenuRetryTicks = 0;
 
     private static InteractionHand rodHandForAction;
     private static int rodSelectedSlotForAction = -1;
@@ -338,7 +338,8 @@ public class FishHelperClient implements ClientModInitializer {
             if (client.screen != null && !ownedPetMenu) return;
             if (rareCreatureTicks > 0) { rareCreatureTicks--; return; }
             if (normalRod == null) normalRod = new RodAccess(client.player, -1, null);
-            if (ACTION_DEADLINE.expired(hotspotRadarStage > 0 ? 100 + hotspotRadarStage : fishingAction, 100)) {
+            if (ownedPetMenu) ACTION_DEADLINE.reset();
+            if (!ownedPetMenu && ACTION_DEADLINE.expired(hotspotRadarStage > 0 ? 100 + hotspotRadarStage : fishingAction, 100)) {
                 restoreActionRod(client.player);
                 if (hotspotRadarStage > 0) restoreHotspotRadarSlot(client.player);
                 if (ownedPetMenu) client.setScreen(null);
@@ -437,6 +438,7 @@ public class FishHelperClient implements ClientModInitializer {
                     fishingAction = 5;
                     actionTimer = ThreadLocalRandom.current().nextInt(2, 5);
                     petMenuWaitTicks = 0;
+                    petMenuRetryTicks = 0;
                 }
             }
 
@@ -496,7 +498,7 @@ public class FishHelperClient implements ClientModInitializer {
                     }
                     fishingAction = 6;
                     actionTimer = ThreadLocalRandom.current().nextInt(2, 4);
-                    petMenuStableTicks = 0;
+                    petMenuRetryTicks = 0;
                 } else if (fishingAction == 11) {
                     actionWeaponSlotForAction = findFlareHotbarSlot(player);
                     if (actionWeaponSlotForAction < 0) { restoreActionRod(player); finishFishingAction(); return; }
@@ -520,11 +522,15 @@ public class FishHelperClient implements ClientModInitializer {
                     if (client.screen instanceof AbstractContainerScreen<?> screen
                             && isPetsMenu(screen.getTitle().getString())
                             && screen.getMenu().slots.size() > petMenuSlot) {
-                        if (++petMenuStableTicks < 3) {
+                        petMenuWaitTicks = 0;
+                        if (++petMenuRetryTicks < 20) {
                             actionTimer = 1;
                         } else {
                             var petStack = screen.getMenu().slots.get(petMenuSlot).getItem();
-                            if (!hasClickToDespawnTooltip(petStack, client, player)) {
+                            if (hasClickToDespawnTooltip(petStack, client, player)) {
+                                client.setScreen(null);
+                                finishFishingAction();
+                            } else if (!petStack.isEmpty()) {
                                 client.gameMode.handleContainerInput(
                                         screen.getMenu().containerId,
                                         petMenuSlot,
@@ -532,9 +538,13 @@ public class FishHelperClient implements ClientModInitializer {
                                         ContainerInput.PICKUP,
                                         player
                                 );
+                                petMenuRetryTicks = 0;
+                                actionTimer = 1;
+                            } else {
+                                // Allow the Pets menu time to populate this slot before retrying.
+                                petMenuRetryTicks = 0;
+                                actionTimer = 1;
                             }
-                            client.setScreen(null);
-                            finishFishingAction();
                         }
                     } else if (++petMenuWaitTicks >= 20) {
                         if (client.screen instanceof AbstractContainerScreen<?> screen
@@ -543,7 +553,7 @@ public class FishHelperClient implements ClientModInitializer {
                         }
                         finishFishingAction();
                     } else {
-                        petMenuStableTicks = 0;
+                        petMenuRetryTicks = 0;
                         actionTimer = 1;
                     }
                 }
@@ -838,7 +848,7 @@ public class FishHelperClient implements ClientModInitializer {
         fishingAction = -1;
         actionTimer = 0;
         petMenuWaitTicks = 0;
-        petMenuStableTicks = 0;
+        petMenuRetryTicks = 0;
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
         actionWeaponSlotForAction = -1;
@@ -904,6 +914,7 @@ public class FishHelperClient implements ClientModInitializer {
         fishingAction = -1;
         actionTimer = 0;
         petMenuWaitTicks = 0;
+        petMenuRetryTicks = 0;
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
         actionWeaponSlotForAction = -1;
@@ -1166,7 +1177,7 @@ public class FishHelperClient implements ClientModInitializer {
         fishingAction = -1;
         actionTimer = 0;
         petMenuWaitTicks = 0;
-        petMenuStableTicks = 0;
+        petMenuRetryTicks = 0;
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
         actionWeaponSlotForAction = -1;
