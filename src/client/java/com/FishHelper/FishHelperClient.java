@@ -250,6 +250,7 @@ public class FishHelperClient implements ClientModInitializer {
                     boolean aborted = thunderResponse.aborted();
                     finishThunderResponse();
                     if (aborted) reportProblem(client.player, "thunder", "Thunder action ended; fishing will continue automatically");
+                    else pendingRecast = true; // Thunder died; restart fishing on the next tick.
                     recoveryRetryTicks = aborted ? 100 : 0;
                     if (aborted) WATCHDOG.failed();
                 }

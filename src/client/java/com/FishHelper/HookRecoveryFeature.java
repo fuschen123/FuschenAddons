@@ -60,7 +60,6 @@ final class HookRecoveryFeature implements HookRecoverySequence.Controls {
     public boolean useHyperion() {
         if (!ThunderResponseFeature.matches(player.getMainHandItem(), ThunderSequence.Item.HYPERION)) return false;
         client.gameMode.useItem(player, InteractionHand.MAIN_HAND);
-        player.swing(InteractionHand.MAIN_HAND);
         guard.used(originalHook, mob);
         return true;
     }

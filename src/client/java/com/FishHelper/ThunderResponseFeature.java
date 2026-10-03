@@ -100,7 +100,6 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
         if (!matches(player.getMainHandItem(), item) || client.gameMode == null) return false;
         // Synchronize the selected slot before using the selected item.
         client.gameMode.useItem(player, InteractionHand.MAIN_HAND);
-        player.swing(InteractionHand.MAIN_HAND);
         return true;
     }
 

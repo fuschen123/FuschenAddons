@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.50
+
+### Changed
+
+- Do not manually animate the hand when right-clicking Hyperion, including during Thunder encounters.
+- Recast the fishing rod immediately after the Thunder encounter ends because Thunder has died.
+
 ## 0.0.49
 
 ### Changed
