@@ -6,6 +6,7 @@
 
 - Prevent the Pets menu from remaining open indefinitely after the selected pet is already equipped or the server fails to close the menu.
 - Click the selected pet only while its tooltip says “Left-click to summon!”, and stop once it says “Click to despawn!”.
+- Recheck the selected pet's tooltip every two seconds while waiting for the summon to complete.
 
 ## 0.0.50
 

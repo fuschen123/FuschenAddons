@@ -539,16 +539,13 @@ public class FishHelperClient implements ClientModInitializer {
                         petMenuSeen = true;
                         var petStack = screen.getMenu().slots.get(petMenuSlot).getItem();
                         if (hasPetTooltip(petStack, client, player, "click to despawn")) {
-                            // Let the server close the menu after equipping; recover if it stays open.
-                            if (!petEquipAttempted || ++petMenuRetryTicks >= 20) {
-                                client.setScreen(null);
-                                finishFishingAction();
-                                return;
-                            }
-                            actionTimer = 1;
+                            // It was already equipped, or the server did not close after the two-second check.
+                            client.setScreen(null);
+                            finishFishingAction();
+                            return;
                         } else if (hasPetTooltip(petStack, client, player, "left-click to summon")) {
                             petMenuWaitTicks = 0;
-                            int retryDelay = petEquipAttempted ? 20 : 3;
+                            int retryDelay = petEquipAttempted ? 1 : 3;
                             if (++petMenuRetryTicks >= retryDelay) {
                                 client.gameMode.handleContainerInput(
                                         screen.getMenu().containerId,
@@ -560,12 +557,12 @@ public class FishHelperClient implements ClientModInitializer {
                                 petEquipAttempted = true;
                                 petMenuRetryTicks = 0;
                             }
-                            actionTimer = 1;
-                        } else if (++petMenuWaitTicks >= 100) {
+                            actionTimer = petEquipAttempted ? 40 : 1;
+                        } else if ((petMenuWaitTicks += 40) >= 120) {
                             client.setScreen(null);
                             finishFishingAction();
                         } else {
-                            actionTimer = 1;
+                            actionTimer = 40;
                         }
                     } else if (++petMenuWaitTicks >= 20) {
                         if (client.screen instanceof AbstractContainerScreen<?> screen
