@@ -342,7 +342,13 @@ public class FishHelperClient implements ClientModInitializer {
                 // The server closes the Pets menu after a successful equip click.
                 finishFishingAction();
             }
-            if (client.screen != null && !ownedPetMenu) return;
+            if (client.screen != null && !ownedPetMenu) {
+                if (Config.INSTANCE.closeMenuWhenReeling && shouldCloseMenuForReel(client, client.player)) {
+                    client.setScreen(null);
+                } else {
+                    return;
+                }
+            }
             if (normalRod == null) normalRod = new RodAccess(client.player, -1, null);
             if (ownedPetMenu) ACTION_DEADLINE.reset();
             if (!ownedPetMenu && ACTION_DEADLINE.expired(hotspotRadarStage > 0 ? 100 + hotspotRadarStage : fishingAction, 100)) {
@@ -1050,6 +1056,30 @@ public class FishHelperClient implements ClientModInitializer {
 
     private static boolean isPetsMenu(String title) {
         return title.matches("(?i)(?:\\(\\d+/\\d+\\)\\s*)?Pets");
+    }
+
+    private static boolean shouldCloseMenuForReel(Minecraft client, LocalPlayer player) {
+        if (client.level == null || player == null) return false;
+        FishingHook bobber = findOwnedBobber(client, player);
+        if (bobber == null) return false;
+
+        boolean biteAlertVisible = false;
+        for (Entity entity : client.level.entitiesForRendering()) {
+            if (entity instanceof ArmorStand stand && stand.hasCustomName()
+                    && stand.distanceTo(bobber) < 2.0
+                    && stand.getCustomName().getString().contains("!!!")) {
+                biteAlertVisible = true;
+                break;
+            }
+        }
+
+        int pingMs = Math.max(0, Math.min(5000, Config.INSTANCE.reelPingMs));
+        boolean pingTimedReel = Config.INSTANCE.reelInUsingPing
+                && isHookTimerWithinPing(client, bobber, pingMs);
+        int slugfishMinimumAgeTicks = Math.max(0, (10_000 - pingMs + 49) / 50);
+        boolean slugfishWaitComplete = bobber.tickCount >= slugfishMinimumAgeTicks;
+        return (biteAlertVisible || pingTimedReel)
+                && (!Config.INSTANCE.slugfishReelEnabled || slugfishWaitComplete);
     }
 
     static void registerCommands(com.mojang.brigadier.CommandDispatcher<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource> dispatcher) {

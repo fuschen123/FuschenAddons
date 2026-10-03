@@ -71,6 +71,9 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                 toggle("Ping-adjusted reel", "Use the hook countdown for all fish", { config.reelInUsingPing }) {
                     config.reelInUsingPing = it
                 }
+                toggle("Close menu to reel", "Close any open screen when a bite signal is ready", { config.closeMenuWhenReeling }) {
+                    config.closeMenuWhenReeling = it
+                }
                 number("Lowest ping", "Round-trip latency in milliseconds (0–5000)", { config.reelPingMs.toString() }, false) {
                     config.reelPingMs = it.toInt().coerceIn(0, 5000)
                 }

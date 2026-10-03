@@ -13,6 +13,7 @@ Fishing Pet now use dropdowns. Click a row to select; Escape or an outside click
 closes the popup. Arrow keys, Home/End and Enter also work. The popup scrolls
 independently of the page and opens above/below its control to fit the screen.
 Values save automatically in `config/fuschenaddons.json`; old settings are retained.
+**Fishing -> Close menu to reel** closes the current screen when a bite signal is ready.
 The fishing keybind is now labelled **Start/Stop FishHelper**. Its binding and the
 mod's name are unchanged.
 
