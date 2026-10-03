@@ -545,7 +545,7 @@ public class FishHelperClient implements ClientModInitializer {
                             return;
                         } else if (hasPetTooltip(petStack, client, player, "left-click to summon")) {
                             petMenuWaitTicks = 0;
-                            int retryDelay = petEquipAttempted ? 1 : 3;
+                            int retryDelay = petEquipAttempted ? 20 : 3;
                             if (++petMenuRetryTicks >= retryDelay) {
                                 client.gameMode.handleContainerInput(
                                         screen.getMenu().containerId,
@@ -557,12 +557,12 @@ public class FishHelperClient implements ClientModInitializer {
                                 petEquipAttempted = true;
                                 petMenuRetryTicks = 0;
                             }
-                            actionTimer = petEquipAttempted ? 40 : 1;
-                        } else if ((petMenuWaitTicks += 40) >= 120) {
+                            actionTimer = 1;
+                        } else if (++petMenuWaitTicks >= 100) {
                             client.setScreen(null);
                             finishFishingAction();
                         } else {
-                            actionTimer = 40;
+                            actionTimer = 1;
                         }
                     } else if (++petMenuWaitTicks >= 20) {
                         if (client.screen instanceof AbstractContainerScreen<?> screen

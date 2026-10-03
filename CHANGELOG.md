@@ -1,11 +1,23 @@
 # Changelog
 
+## 0.0.53
+
+### Changed
+
+- Retry pet summon after 20 ticks if the tooltip still says “Left-click to summon!”.
+- Close the Pets menu immediately when the selected pet tooltip changes to “Click to despawn!”.
+
 ## 0.0.51
 
 ### Fixed
 
 - Prevent the Pets menu from remaining open indefinitely after the selected pet is already equipped or the server fails to close the menu.
 - Click the selected pet only while its tooltip says “Left-click to summon!”, and stop once it says “Click to despawn!”.
+
+## 0.0.52
+
+### Changed
+
 - Recheck the selected pet's tooltip every two seconds while waiting for the summon to complete.
 
 ## 0.0.50
