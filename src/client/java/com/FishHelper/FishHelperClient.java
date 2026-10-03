@@ -338,11 +338,11 @@ public class FishHelperClient implements ClientModInitializer {
 
             boolean ownedPetMenu = fishingAction == 6 && client.screen instanceof AbstractContainerScreen<?> petScreen
                     && isPetsMenu(petScreen.getTitle().getString());
-            if (client.screen != null && !ownedPetMenu) return;
             if (fishingAction == 6 && petMenuSeen && !ownedPetMenu) {
                 // The server closes the Pets menu after a successful equip click.
                 finishFishingAction();
             }
+            if (client.screen != null && !ownedPetMenu) return;
             if (normalRod == null) normalRod = new RodAccess(client.player, -1, null);
             if (ownedPetMenu) ACTION_DEADLINE.reset();
             if (!ownedPetMenu && ACTION_DEADLINE.expired(hotspotRadarStage > 0 ? 100 + hotspotRadarStage : fishingAction, 100)) {
@@ -537,28 +537,34 @@ public class FishHelperClient implements ClientModInitializer {
                             && isPetsMenu(screen.getTitle().getString())
                             && screen.getMenu().slots.size() > petMenuSlot) {
                         petMenuSeen = true;
-                        petMenuWaitTicks = 0;
                         var petStack = screen.getMenu().slots.get(petMenuSlot).getItem();
-                        if (hasClickToDespawnTooltip(petStack, client, player)) {
-                            // Let the server close its Pets menu after a successful equip.
-                            // Wait here without clicking again; retries are only for a failed equip.
-                            petMenuRetryTicks = 0;
+                        if (hasPetTooltip(petStack, client, player, "click to despawn")) {
+                            // Let the server close the menu after equipping; recover if it stays open.
+                            if (!petEquipAttempted || ++petMenuRetryTicks >= 20) {
+                                client.setScreen(null);
+                                finishFishingAction();
+                                return;
+                            }
                             actionTimer = 1;
-                        } else {
+                        } else if (hasPetTooltip(petStack, client, player, "left-click to summon")) {
+                            petMenuWaitTicks = 0;
                             int retryDelay = petEquipAttempted ? 20 : 3;
                             if (++petMenuRetryTicks >= retryDelay) {
-                                if (!petStack.isEmpty()) {
-                                    client.gameMode.handleContainerInput(
-                                            screen.getMenu().containerId,
-                                            petMenuSlot,
-                                            0,
-                                            ContainerInput.PICKUP,
-                                            player
-                                    );
-                                    petEquipAttempted = true;
-                                }
+                                client.gameMode.handleContainerInput(
+                                        screen.getMenu().containerId,
+                                        petMenuSlot,
+                                        0,
+                                        ContainerInput.PICKUP,
+                                        player
+                                );
+                                petEquipAttempted = true;
                                 petMenuRetryTicks = 0;
                             }
+                            actionTimer = 1;
+                        } else if (++petMenuWaitTicks >= 100) {
+                            client.setScreen(null);
+                            finishFishingAction();
+                        } else {
                             actionTimer = 1;
                         }
                     } else if (++petMenuWaitTicks >= 20) {
@@ -1173,12 +1179,12 @@ public class FishHelperClient implements ClientModInitializer {
         }
     }
 
-    private static boolean hasClickToDespawnTooltip(
+    private static boolean hasPetTooltip(
             net.minecraft.world.item.ItemStack stack,
             Minecraft client,
-            LocalPlayer player
+            LocalPlayer player,
+            String target
     ) {
-        String target = "click to despawn";
         String storedText = stack.getComponents().toString() + " " + stack.getHoverName().getString();
         if (storedText.toLowerCase(java.util.Locale.ROOT).contains(target)) {
             return true;
