@@ -40,6 +40,9 @@ public class Config {
     /** Reel any fish when its nearby Hypixel hook countdown reaches the configured ping threshold. */
     public boolean reelInUsingPing = false;
 
+    /** Close an open screen when a bite signal says it is time to reel. */
+    public boolean closeMenuWhenReeling = false;
+
     /** User-entered round-trip latency, in milliseconds. */
     public int reelPingMs = 100;
 

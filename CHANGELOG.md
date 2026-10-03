@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.54
+
+### Added
+
+- Add an option to close any open menu when it is time to reel, including the auto-opened Pets menu.
+
 ## 0.0.53
 
 ### Changed
