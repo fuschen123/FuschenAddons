@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.47
+
+### Changed
+
+- Use Hyperion 4–6 ticks after any mob is attached to the owned fishing bobber, with no added delay after that timing window.
+
 ## 0.0.46
 
 ### Changed

@@ -9,9 +9,11 @@ public final class HookRecoverySequence {
     }
     private int stage, delay;
     private final RecastSequence recast;
+    private final int hyperionDelay;
     private RecastSequence.Problem problem = RecastSequence.Problem.NONE;
-    public HookRecoverySequence(boolean hyperion, java.util.UUID hook) {
+    public HookRecoverySequence(boolean hyperion, java.util.UUID hook, int hyperionDelay) {
         stage = hyperion ? 0 : 2;
+        this.hyperionDelay = Math.max(3, Math.min(5, hyperionDelay));
         recast = new RecastSequence(hook);
     }
     public boolean active() { return stage < 3; }
@@ -23,7 +25,9 @@ public final class HookRecoverySequence {
         if (stage == 0) {
             if (!c.selectRod()) { problem = RecastSequence.Problem.MISSING_ROD; stage = 3; return; }
             if (!c.selectHyperion()) { problem = RecastSequence.Problem.MISSING_HYPERION; stage = 3; return; }
-            stage = 1; delay = 2;
+            // The setup tick plus this delay yields a use exactly 4–6 ticks
+            // after the hook is first handled (hyperionDelay is 3–5).
+            stage = 1; delay = hyperionDelay;
         } else if (stage == 1) {
             if (!c.rodAvailable()) { problem = RecastSequence.Problem.MISSING_ROD; stage = 3; return; }
             if (!c.useHyperion()) { problem = RecastSequence.Problem.MISSING_HYPERION; stage = 3; return; }

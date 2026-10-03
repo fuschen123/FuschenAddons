@@ -10,6 +10,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.projectile.FishingHook;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 /** Exclusive input owner for normal, watchdog and mob recovery recasts. */
 final class HookRecoveryFeature implements HookRecoverySequence.Controls {
@@ -26,7 +27,8 @@ final class HookRecoveryFeature implements HookRecoverySequence.Controls {
         this.client = client; player = client.player; world = client.level;
         originalHook = hook; this.mob = mob; this.guard = guard;
         rod = new RodAccess(player, slot, hand);
-        sequence = new HookRecoverySequence(attack && !guard.wasUsed(hook, mob), hook);
+        sequence = new HookRecoverySequence(attack && !guard.wasUsed(hook, mob), hook,
+                ThreadLocalRandom.current().nextInt(3, 6));
     }
     static boolean isBlockingMob(FishingHook hook, LocalPlayer player) {
         if (hook == null || hook.getOwner() != player) return false;
