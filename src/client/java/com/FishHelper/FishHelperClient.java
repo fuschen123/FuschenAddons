@@ -338,16 +338,21 @@ public class FishHelperClient implements ClientModInitializer {
 
             boolean ownedPetMenu = fishingAction == 6 && client.screen instanceof AbstractContainerScreen<?> petScreen
                     && isPetsMenu(petScreen.getTitle().getString());
+            if (client.screen != null && Config.INSTANCE.closeMenuWhenReeling
+                    && shouldCloseMenuForReel(client, client.player)) {
+                client.setScreen(null);
+                if (ownedPetMenu) {
+                    // Stop the pet-menu wait so the pending reel can run immediately.
+                    finishFishingAction();
+                    ownedPetMenu = false;
+                }
+            }
             if (fishingAction == 6 && petMenuSeen && !ownedPetMenu) {
                 // The server closes the Pets menu after a successful equip click.
                 finishFishingAction();
             }
             if (client.screen != null && !ownedPetMenu) {
-                if (Config.INSTANCE.closeMenuWhenReeling && shouldCloseMenuForReel(client, client.player)) {
-                    client.setScreen(null);
-                } else {
-                    return;
-                }
+                return;
             }
             if (normalRod == null) normalRod = new RodAccess(client.player, -1, null);
             if (ownedPetMenu) ACTION_DEADLINE.reset();
