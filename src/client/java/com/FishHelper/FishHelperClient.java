@@ -71,6 +71,8 @@ public class FishHelperClient implements ClientModInitializer {
     private static int actionTimer = 0;
     private static int petMenuWaitTicks = 0;
     private static int petMenuRetryTicks = 0;
+    private static boolean petEquipAttempted = false;
+    private static boolean petMenuSeen = false;
 
     private static InteractionHand rodHandForAction;
     private static int rodSelectedSlotForAction = -1;
@@ -336,7 +338,10 @@ public class FishHelperClient implements ClientModInitializer {
             boolean ownedPetMenu = fishingAction == 6 && client.screen instanceof AbstractContainerScreen<?> petScreen
                     && isPetsMenu(petScreen.getTitle().getString());
             if (client.screen != null && !ownedPetMenu) return;
-            if (rareCreatureTicks > 0) { rareCreatureTicks--; return; }
+            if (fishingAction == 6 && petMenuSeen && !ownedPetMenu) {
+                // The server closes the Pets menu after a successful equip click.
+                finishFishingAction();
+            }
             if (normalRod == null) normalRod = new RodAccess(client.player, -1, null);
             if (ownedPetMenu) ACTION_DEADLINE.reset();
             if (!ownedPetMenu && ACTION_DEADLINE.expired(hotspotRadarStage > 0 ? 100 + hotspotRadarStage : fishingAction, 100)) {
@@ -401,13 +406,17 @@ public class FishHelperClient implements ClientModInitializer {
                 return;
             }
             if (client.screen == null && HookRecoveryFeature.isBlockingMob(activeBobber, player)) {
-                if (recoveryRetryTicks == 0) {
+                Entity hookedMob = activeBobber.getHookedIn();
+                boolean newMobEncounter = hookedMob != null
+                        && !HOOK_ENCOUNTERS.wasUsed(activeBobber.getUUID(), hookedMob.getUUID());
+                if (recoveryRetryTicks == 0 || newMobEncounter) {
                     beginRecast(client, activeBobber, true, false);
                 } else {
-                    GrinchAutoClickerFeature.tick(client, player, activeBobber.getHookedIn());
+                    GrinchAutoClickerFeature.tick(client, player, hookedMob);
                 }
                 return;
             }
+            if (rareCreatureTicks > 0) { rareCreatureTicks--; return; }
             if (pendingRecast && fishingAction < 0) {
                 if (recoveryRetryTicks == 0) beginRecast(client, activeBobber, false, false);
                 return;
@@ -439,6 +448,8 @@ public class FishHelperClient implements ClientModInitializer {
                     actionTimer = ThreadLocalRandom.current().nextInt(2, 5);
                     petMenuWaitTicks = 0;
                     petMenuRetryTicks = 0;
+                    petEquipAttempted = false;
+                    petMenuSeen = false;
                 }
             }
 
@@ -499,6 +510,8 @@ public class FishHelperClient implements ClientModInitializer {
                     fishingAction = 6;
                     actionTimer = ThreadLocalRandom.current().nextInt(2, 4);
                     petMenuRetryTicks = 0;
+                    petEquipAttempted = false;
+                    petMenuSeen = false;
                 } else if (fishingAction == 11) {
                     actionWeaponSlotForAction = findFlareHotbarSlot(player);
                     if (actionWeaponSlotForAction < 0) { restoreActionRod(player); finishFishingAction(); return; }
@@ -522,29 +535,30 @@ public class FishHelperClient implements ClientModInitializer {
                     if (client.screen instanceof AbstractContainerScreen<?> screen
                             && isPetsMenu(screen.getTitle().getString())
                             && screen.getMenu().slots.size() > petMenuSlot) {
+                        petMenuSeen = true;
                         petMenuWaitTicks = 0;
-                        if (++petMenuRetryTicks < 20) {
+                        var petStack = screen.getMenu().slots.get(petMenuSlot).getItem();
+                        if (hasClickToDespawnTooltip(petStack, client, player)) {
+                            // Let the server close its Pets menu after a successful equip.
+                            // Wait here without clicking again; retries are only for a failed equip.
+                            petMenuRetryTicks = 0;
                             actionTimer = 1;
                         } else {
-                            var petStack = screen.getMenu().slots.get(petMenuSlot).getItem();
-                            if (hasClickToDespawnTooltip(petStack, client, player)) {
-                                client.setScreen(null);
-                                finishFishingAction();
-                            } else if (!petStack.isEmpty()) {
-                                client.gameMode.handleContainerInput(
-                                        screen.getMenu().containerId,
-                                        petMenuSlot,
-                                        0,
-                                        ContainerInput.PICKUP,
-                                        player
-                                );
+                            int retryDelay = petEquipAttempted ? 20 : 3;
+                            if (++petMenuRetryTicks >= retryDelay) {
+                                if (!petStack.isEmpty()) {
+                                    client.gameMode.handleContainerInput(
+                                            screen.getMenu().containerId,
+                                            petMenuSlot,
+                                            0,
+                                            ContainerInput.PICKUP,
+                                            player
+                                    );
+                                    petEquipAttempted = true;
+                                }
                                 petMenuRetryTicks = 0;
-                                actionTimer = 1;
-                            } else {
-                                // Allow the Pets menu time to populate this slot before retrying.
-                                petMenuRetryTicks = 0;
-                                actionTimer = 1;
                             }
+                            actionTimer = 1;
                         }
                     } else if (++petMenuWaitTicks >= 20) {
                         if (client.screen instanceof AbstractContainerScreen<?> screen
@@ -849,6 +863,8 @@ public class FishHelperClient implements ClientModInitializer {
         actionTimer = 0;
         petMenuWaitTicks = 0;
         petMenuRetryTicks = 0;
+        petEquipAttempted = false;
+        petMenuSeen = false;
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
         actionWeaponSlotForAction = -1;
@@ -915,6 +931,8 @@ public class FishHelperClient implements ClientModInitializer {
         actionTimer = 0;
         petMenuWaitTicks = 0;
         petMenuRetryTicks = 0;
+        petEquipAttempted = false;
+        petMenuSeen = false;
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
         actionWeaponSlotForAction = -1;
@@ -1178,6 +1196,8 @@ public class FishHelperClient implements ClientModInitializer {
         actionTimer = 0;
         petMenuWaitTicks = 0;
         petMenuRetryTicks = 0;
+        petEquipAttempted = false;
+        petMenuSeen = false;
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
         actionWeaponSlotForAction = -1;

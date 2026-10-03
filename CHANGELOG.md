@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.49
+
+### Changed
+
+- Use Hyperion on the fifth tick after a bobber hooks a mob, bypassing the rare-creature and recovery retry delays for that hook.
+- Let the server close the Pets menu after a successful pet equip; retry the click after one second only when the pet is not equipped.
+
 ## 0.0.48
 
 ### Changed
