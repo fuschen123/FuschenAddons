@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.59
+
+### Fixed
+
+- Close the Pets menu after 10 ticks when the fishing hook is no longer active.
+
 ## 0.0.58
 
 ### Fixed
