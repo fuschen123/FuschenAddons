@@ -338,11 +338,22 @@ public class FishHelperClient implements ClientModInitializer {
 
             boolean ownedPetMenu = fishingAction == 6 && client.screen instanceof AbstractContainerScreen<?> petScreen
                     && isPetsMenu(petScreen.getTitle().getString());
+            if (client.screen != null && Config.INSTANCE.closeMenuWhenReeling
+                    && shouldCloseMenuForReel(client, client.player)) {
+                client.setScreen(null);
+                if (ownedPetMenu) {
+                    // Stop the pet-menu wait so the pending reel can run immediately.
+                    finishFishingAction();
+                    ownedPetMenu = false;
+                }
+            }
             if (fishingAction == 6 && petMenuSeen && !ownedPetMenu) {
                 // The server closes the Pets menu after a successful equip click.
                 finishFishingAction();
             }
-            if (client.screen != null && !ownedPetMenu) return;
+            if (client.screen != null && !ownedPetMenu) {
+                return;
+            }
             if (normalRod == null) normalRod = new RodAccess(client.player, -1, null);
             if (ownedPetMenu) ACTION_DEADLINE.reset();
             if (!ownedPetMenu && ACTION_DEADLINE.expired(hotspotRadarStage > 0 ? 100 + hotspotRadarStage : fishingAction, 100)) {
@@ -503,6 +514,13 @@ public class FishHelperClient implements ClientModInitializer {
                 } else if (fishingAction == 3) {
                     beginRecast(client, actionHook, null, false, true);
                 } else if (fishingAction == 5) {
+                    if (activeBobber == null) {
+                        // Wait for the cast to be visible before opening Pets; the hook can vanish between detection and this step.
+                        if (++petMenuWaitTicks >= 40) finishFishingAction();
+                        else actionTimer = 1;
+                        return;
+                    }
+                    petMenuWaitTicks = 0;
                     if (!(client.screen instanceof AbstractContainerScreen<?> screen
                             && isPetsMenu(screen.getTitle().getString()))) {
                         player.connection.sendCommand("pets");
@@ -532,6 +550,14 @@ public class FishHelperClient implements ClientModInitializer {
                 } else if (fishingAction == 13) {
                     beginRecast(client, actionHook, null, false, false);
                 } else {
+                    if (activeBobber == null) {
+                        if (client.screen instanceof AbstractContainerScreen<?> screen
+                                && isPetsMenu(screen.getTitle().getString())) {
+                            client.setScreen(null);
+                        }
+                        finishFishingAction();
+                        return;
+                    }
                     int petMenuSlot = 9 + Math.max(1, Math.min(7, Config.INSTANCE.petNumber));
                     if (client.screen instanceof AbstractContainerScreen<?> screen
                             && isPetsMenu(screen.getTitle().getString())
@@ -1050,6 +1076,30 @@ public class FishHelperClient implements ClientModInitializer {
 
     private static boolean isPetsMenu(String title) {
         return title.matches("(?i)(?:\\(\\d+/\\d+\\)\\s*)?Pets");
+    }
+
+    private static boolean shouldCloseMenuForReel(Minecraft client, LocalPlayer player) {
+        if (client.level == null || player == null) return false;
+        FishingHook bobber = findOwnedBobber(client, player);
+        if (bobber == null) return false;
+
+        boolean biteAlertVisible = false;
+        for (Entity entity : client.level.entitiesForRendering()) {
+            if (entity instanceof ArmorStand stand && stand.hasCustomName()
+                    && stand.distanceTo(bobber) < 2.0
+                    && stand.getCustomName().getString().contains("!!!")) {
+                biteAlertVisible = true;
+                break;
+            }
+        }
+
+        int pingMs = Math.max(0, Math.min(5000, Config.INSTANCE.reelPingMs));
+        boolean pingTimedReel = Config.INSTANCE.reelInUsingPing
+                && isHookTimerWithinPing(client, bobber, pingMs);
+        int slugfishMinimumAgeTicks = Math.max(0, (10_000 - pingMs + 49) / 50);
+        boolean slugfishWaitComplete = bobber.tickCount >= slugfishMinimumAgeTicks;
+        return (biteAlertVisible || pingTimedReel)
+                && (!Config.INSTANCE.slugfishReelEnabled || slugfishWaitComplete);
     }
 
     static void registerCommands(com.mojang.brigadier.CommandDispatcher<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource> dispatcher) {

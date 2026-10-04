@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.55
+
+### Fixed
+
+- Wait for a live fishing hook before opening the Pets menu, and close it if the hook disappears during pet handling.
+
+## 0.0.54
+
+### Added
+
+- Add an option to close any open menu when it is time to reel, including the auto-opened Pets menu.
+
 ## 0.0.53
 
 ### Changed
