@@ -514,6 +514,13 @@ public class FishHelperClient implements ClientModInitializer {
                 } else if (fishingAction == 3) {
                     beginRecast(client, actionHook, null, false, true);
                 } else if (fishingAction == 5) {
+                    if (activeBobber == null) {
+                        // Wait for the cast to be visible before opening Pets; the hook can vanish between detection and this step.
+                        if (++petMenuWaitTicks >= 40) finishFishingAction();
+                        else actionTimer = 1;
+                        return;
+                    }
+                    petMenuWaitTicks = 0;
                     if (!(client.screen instanceof AbstractContainerScreen<?> screen
                             && isPetsMenu(screen.getTitle().getString()))) {
                         player.connection.sendCommand("pets");
@@ -543,6 +550,14 @@ public class FishHelperClient implements ClientModInitializer {
                 } else if (fishingAction == 13) {
                     beginRecast(client, actionHook, null, false, false);
                 } else {
+                    if (activeBobber == null) {
+                        if (client.screen instanceof AbstractContainerScreen<?> screen
+                                && isPetsMenu(screen.getTitle().getString())) {
+                            client.setScreen(null);
+                        }
+                        finishFishingAction();
+                        return;
+                    }
                     int petMenuSlot = 9 + Math.max(1, Math.min(7, Config.INSTANCE.petNumber));
                     if (client.screen instanceof AbstractContainerScreen<?> screen
                             && isPetsMenu(screen.getTitle().getString())
