@@ -23,13 +23,18 @@ jobs:
         run: chmod +x ./gradlew
       - name: build
         run: ./gradlew build
+      - name: read project name
+        id: project
+        run: |
+          project_name=$(sed -n "s/^rootProject.name = '\(.*\)'/\1/p" settings.gradle)
+          echo "name=$project_name" >> "$GITHUB_OUTPUT"
       - name: upload mod jar
         uses: actions/upload-artifact@v7
         with:
-          path: build/libs/FuschenAddons_v0.0.53.jar
+          path: build/libs/${{ steps.project.outputs.name }}.jar
           archive: false
       - name: upload sources jar
         uses: actions/upload-artifact@v7
         with:
-          path: build/libs/FuschenAddons_v0.0.53-sources.jar
+          path: build/libs/${{ steps.project.outputs.name }}-sources.jar
           archive: false

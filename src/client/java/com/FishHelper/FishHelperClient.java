@@ -71,6 +71,7 @@ public class FishHelperClient implements ClientModInitializer {
     private static int actionTimer = 0;
     private static int petMenuWaitTicks = 0;
     private static int petMenuRetryTicks = 0;
+    private static int petMenuNoBobberTicks = 0;
     private static boolean petEquipAttempted = false;
     private static boolean petMenuSeen = false;
 
@@ -261,7 +262,7 @@ public class FishHelperClient implements ClientModInitializer {
                 boolean cancelled = !hookRecovery.canContinue();
                 if (cancelled || !hookRecovery.tick()) {
                     var problem = cancelled ? RecastSequence.Problem.CANCELLED : hookRecovery.problem();
-                    boolean equipPet = (petAfterRecovery || hookRecovery.castIssued()) && problem == RecastSequence.Problem.NONE;
+                    boolean equipPet = petAfterRecovery && problem == RecastSequence.Problem.NONE;
                     finishHookRecovery();
                     recoveryRetryTicks = 100;
                     if (problem == RecastSequence.Problem.NONE) {
@@ -460,6 +461,7 @@ public class FishHelperClient implements ClientModInitializer {
                     actionTimer = ThreadLocalRandom.current().nextInt(2, 5);
                     petMenuWaitTicks = 0;
                     petMenuRetryTicks = 0;
+                    petMenuNoBobberTicks = 0;
                     petEquipAttempted = false;
                     petMenuSeen = false;
                 }
@@ -551,13 +553,24 @@ public class FishHelperClient implements ClientModInitializer {
                     beginRecast(client, actionHook, null, false, false);
                 } else {
                     if (activeBobber == null) {
-                        if (client.screen instanceof AbstractContainerScreen<?> screen
-                                && isPetsMenu(screen.getTitle().getString())) {
-                            client.setScreen(null);
+                        boolean petsMenuOpen = client.screen instanceof AbstractContainerScreen<?> screen
+                                && isPetsMenu(screen.getTitle().getString());
+                        if (petsMenuOpen) {
+                            if (++petMenuNoBobberTicks >= 10) {
+                                client.setScreen(null);
+                                finishFishingAction();
+                            } else {
+                                actionTimer = 1;
+                            }
+                        } else if (++petMenuWaitTicks >= 100) {
+                            finishFishingAction();
+                        } else {
+                            petMenuNoBobberTicks = 0;
+                            actionTimer = 1;
                         }
-                        finishFishingAction();
                         return;
                     }
+                    petMenuNoBobberTicks = 0;
                     int petMenuSlot = 9 + Math.max(1, Math.min(7, Config.INSTANCE.petNumber));
                     if (client.screen instanceof AbstractContainerScreen<?> screen
                             && isPetsMenu(screen.getTitle().getString())
@@ -893,6 +906,7 @@ public class FishHelperClient implements ClientModInitializer {
         actionTimer = 0;
         petMenuWaitTicks = 0;
         petMenuRetryTicks = 0;
+        petMenuNoBobberTicks = 0;
         petEquipAttempted = false;
         petMenuSeen = false;
         rodHandForAction = null;
@@ -961,6 +975,7 @@ public class FishHelperClient implements ClientModInitializer {
         actionTimer = 0;
         petMenuWaitTicks = 0;
         petMenuRetryTicks = 0;
+        petMenuNoBobberTicks = 0;
         petEquipAttempted = false;
         petMenuSeen = false;
         rodHandForAction = null;
@@ -1250,6 +1265,7 @@ public class FishHelperClient implements ClientModInitializer {
         actionTimer = 0;
         petMenuWaitTicks = 0;
         petMenuRetryTicks = 0;
+        petMenuNoBobberTicks = 0;
         petEquipAttempted = false;
         petMenuSeen = false;
         rodHandForAction = null;

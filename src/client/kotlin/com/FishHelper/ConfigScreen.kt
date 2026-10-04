@@ -34,7 +34,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
     private var panelWidth = 0
     private var panelHeight = 0
     private var visibleRows = 1
-    private val rowHeight = 43
+    private val rowHeight = 40
     private data class Dropdown(val owner: CascadeButton, val labels: List<String>, val choose: (Int) -> Unit,
                                 var highlighted: Int, var offset: Int = 0)
     private var dropdown: Dropdown? = null

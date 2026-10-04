@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.0.59
+
+### Fixed
+
+- Close the Pets menu after 10 ticks when the fishing hook is no longer active.
+
+## 0.0.58
+
+### Fixed
+
+- Only open the Pets menu after recasts that explicitly request pet handling; flare and recovery recasts no longer trigger it just because they cast successfully.
+
+## 0.0.57
+
+### Changed
+
+- Fit seven configuration rows on a page by tightening the row spacing.
+
+## 0.0.56
+
+### Fixed
+
+- Resolve CI artifact upload paths from the current project name so version bumps do not leave stale filenames.
+
 ## 0.0.55
 
 ### Fixed
