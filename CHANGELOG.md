@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.56
+
+### Fixed
+
+- Resolve CI artifact upload paths from the current project name so version bumps do not leave stale filenames.
+
 ## 0.0.55
 
 ### Fixed
