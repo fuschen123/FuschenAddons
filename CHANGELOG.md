@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.58
+
+### Fixed
+
+- Only open the Pets menu after recasts that explicitly request pet handling; flare and recovery recasts no longer trigger it just because they cast successfully.
+
 ## 0.0.57
 
 ### Changed

@@ -261,7 +261,7 @@ public class FishHelperClient implements ClientModInitializer {
                 boolean cancelled = !hookRecovery.canContinue();
                 if (cancelled || !hookRecovery.tick()) {
                     var problem = cancelled ? RecastSequence.Problem.CANCELLED : hookRecovery.problem();
-                    boolean equipPet = (petAfterRecovery || hookRecovery.castIssued()) && problem == RecastSequence.Problem.NONE;
+                    boolean equipPet = petAfterRecovery && problem == RecastSequence.Problem.NONE;
                     finishHookRecovery();
                     recoveryRetryTicks = 100;
                     if (problem == RecastSequence.Problem.NONE) {
