@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.57
+
+### Changed
+
+- Fit seven configuration rows on a page by tightening the row spacing.
+
 ## 0.0.56
 
 ### Fixed
