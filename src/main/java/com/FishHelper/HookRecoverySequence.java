@@ -6,6 +6,7 @@ public final class HookRecoverySequence {
         boolean rodAvailable();
         boolean selectHyperion();
         boolean useHyperion();
+        boolean stillHooked();
     }
     private int stage, delay;
     private final RecastSequence recast;
@@ -23,12 +24,14 @@ public final class HookRecoverySequence {
     public void tick(Controls c) {
         if (!active() || delay > 0 && --delay > 0) return;
         if (stage == 0) {
+            if (!c.stillHooked()) { stage = 2; return; }
             if (!c.selectRod()) { problem = RecastSequence.Problem.MISSING_ROD; stage = 3; return; }
             if (!c.selectHyperion()) { problem = RecastSequence.Problem.MISSING_HYPERION; stage = 3; return; }
             // The setup tick plus this delay yields a use exactly 4–6 ticks
             // after the hook is first handled (hyperionDelay is 3–5).
             stage = 1; delay = hyperionDelay;
         } else if (stage == 1) {
+            if (!c.stillHooked()) { stage = 2; return; }
             if (!c.rodAvailable()) { problem = RecastSequence.Problem.MISSING_ROD; stage = 3; return; }
             if (!c.useHyperion()) { problem = RecastSequence.Problem.MISSING_HYPERION; stage = 3; return; }
             stage = 2; delay = 2;

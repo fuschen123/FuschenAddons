@@ -61,18 +61,18 @@ public class FishHelperClient implements ClientModInitializer {
     private static final ActionDeadline ACTION_DEADLINE = new ActionDeadline();
     private static final JawbusPauseFeature JAWBUS_PAUSE = new JawbusPauseFeature();
     private static int recoveryRetryTicks, rareCreatureTicks;
+    private static int rareRestoreSlot = -1;
     private static boolean petAfterRecovery, pendingRecast;
     private static RodAccess normalRod;
     private static UUID actionHook;
+    private static UUID recoveryAttemptMob;
     private static String lastProblem = "";
-    private static int flarePlacementCooldown = 0;
+    private static int flareCheckTicks = 0;
+    private static FlareFeature flare;
+    private static PetSwapSequence petSwap;
     private static boolean sosFlarePending = false;
-    private static int fishingAction = -1; // -1 idle; 0-6 bite/pet sequence; 11-13 flare placement
+    private static int fishingAction = -1; // -1 idle; 0-4 catch sequence; 5-6 pet transaction
     private static int actionTimer = 0;
-    private static int petMenuWaitTicks = 0;
-    private static int petMenuRetryTicks = 0;
-    private static boolean petEquipAttempted = false;
-    private static boolean petMenuSeen = false;
 
     private static InteractionHand rodHandForAction;
     private static int rodSelectedSlotForAction = -1;
@@ -115,6 +115,8 @@ public class FishHelperClient implements ClientModInitializer {
                         KeyCategories.MAIN
                 )
         );
+        ModBindings.register("toggle", TOGGLE_KEY);
+        ModBindings.register("config", CONFIG_KEY);
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> registerCommands(dispatcher));
 
@@ -177,10 +179,12 @@ public class FishHelperClient implements ClientModInitializer {
             }
 
             if (enabled && hoppityPauseTicks == 0 && thunderResponse == null && STOP_MESSAGES.contains(plainMessage)) {
+                finishFlare();
                 finishHookRecovery();
                 restoreActionRod(client.player);
                 finishFishingAction();
                 if (normalRod == null && client.player != null) normalRod = new RodAccess(client.player, -1, null);
+                rareRestoreSlot = client.player == null ? -1 : client.player.getInventory().getSelectedSlot();
                 switchToActionWeaponForRareCreature(client.player);
                 rareCreatureTicks = 40;
             }
@@ -188,6 +192,8 @@ public class FishHelperClient implements ClientModInitializer {
 
     static void tick(Minecraft client) {
             SeaCreatureTracker.INSTANCE.tick(client);
+            PetMenus.observe(client);
+            ModBindings.observe();
             if (!worldLevelObservationInitialized) {
                 observedWorldLevel = client.level;
                 observedConnection = client.getConnection();
@@ -226,6 +232,11 @@ public class FishHelperClient implements ClientModInitializer {
             }
 
             if (!enabled) return;
+            if (Config.INSTANCE.flareTier == Config.FlareTier.NONE) {
+                sosFlarePending = false; flareCheckTicks = 0;
+            } else if (++flareCheckTicks >= 200) {
+                flareCheckTicks = 0; sosFlarePending = true;
+            }
             JawbusPause.Change jawbusChange = JAWBUS_PAUSE.tick(client);
             if (jawbusChange == JawbusPause.Change.STARTED) beginJawbusPause(client);
             if (jawbusChange == JawbusPause.Change.ENDED) {
@@ -267,7 +278,7 @@ public class FishHelperClient implements ClientModInitializer {
                     if (problem == RecastSequence.Problem.NONE) {
                         pendingRecast = false;
                         WATCHDOG.completed(); lastProblem = "";
-                        if (equipPet) { fishingAction = 5; actionTimer = 2; }
+                        if (equipPet && Config.INSTANCE.petSwapEnabled) { fishingAction = 5; actionTimer = 0; }
                     } else {
                         pendingRecast = true;
                         WATCHDOG.failed();
@@ -336,8 +347,25 @@ public class FishHelperClient implements ClientModInitializer {
                 return;
             }
 
-            boolean ownedPetMenu = fishingAction == 6 && client.screen instanceof AbstractContainerScreen<?> petScreen
-                    && isPetsMenu(petScreen.getTitle().getString());
+            FishingHook interruptHook = findOwnedBobber(client, client.player);
+            if ((flare != null || fishingAction >= 0) && (client.screen == null || PetMenus.screen(client) != null)
+                    && HookRecoveryFeature.isBlockingMob(interruptHook, client.player)) {
+                finishFlare();
+                if (PetMenus.screen(client) != null) client.player.closeContainer();
+                restoreActionRod(client.player);
+                finishFishingAction();
+                beginRecast(client, interruptHook, true, false);
+                return;
+            }
+            if (flare != null) {
+                if (!flare.tick()) { flare = null; WATCHDOG.interrupted(); }
+                return;
+            }
+            boolean ownedPetMenu = (fishingAction == 5 || fishingAction == 6) && PetMenus.screen(client) != null;
+            if ((fishingAction == 5 || fishingAction == 6) && !Config.INSTANCE.petSwapEnabled) {
+                if (ownedPetMenu && petSwap != null) client.player.closeContainer();
+                finishFishingAction(); ownedPetMenu = false;
+            }
             if (client.screen != null && Config.INSTANCE.closeMenuWhenReeling
                     && shouldCloseMenuForReel(client, client.player)) {
                 client.setScreen(null);
@@ -347,16 +375,14 @@ public class FishHelperClient implements ClientModInitializer {
                     ownedPetMenu = false;
                 }
             }
-            if (fishingAction == 6 && petMenuSeen && !ownedPetMenu) {
-                // The server closes the Pets menu after a successful equip click.
-                finishFishingAction();
-            }
             if (client.screen != null && !ownedPetMenu) {
+                if (fishingAction == 5 || fishingAction == 6) finishFishingAction();
                 return;
             }
             if (normalRod == null) normalRod = new RodAccess(client.player, -1, null);
-            if (ownedPetMenu) ACTION_DEADLINE.reset();
-            if (!ownedPetMenu && ACTION_DEADLINE.expired(hotspotRadarStage > 0 ? 100 + hotspotRadarStage : fishingAction, 100)) {
+            boolean petPhase = fishingAction == 5 || fishingAction == 6;
+            if (ACTION_DEADLINE.expired(hotspotRadarStage > 0 ? 100 + hotspotRadarStage : fishingAction,
+                    petPhase ? Config.INSTANCE.petCommandDelayTicks + 620 : 100)) {
                 restoreActionRod(client.player);
                 if (hotspotRadarStage > 0) restoreHotspotRadarSlot(client.player);
                 if (ownedPetMenu) client.setScreen(null);
@@ -409,18 +435,16 @@ public class FishHelperClient implements ClientModInitializer {
                 }
                 return;
             }
-            if (flarePlacementCooldown > 0) {
-                flarePlacementCooldown--;
-            }
             FishingHook activeBobber = findOwnedBobber(client, player);
             if (!normalRod.available() && fishingAction < 0) {
                 reportProblem(player, "rod", "Waiting for a fishing rod in the hotbar or offhand");
                 return;
             }
-            if (client.screen == null && HookRecoveryFeature.isBlockingMob(activeBobber, player)) {
+            if (client.screen == null && fishingAction < 0 && HookRecoveryFeature.isBlockingMob(activeBobber, player)) {
                 Entity hookedMob = activeBobber.getHookedIn();
                 boolean newMobEncounter = hookedMob != null
-                        && !HOOK_ENCOUNTERS.wasUsed(activeBobber.getUUID(), hookedMob.getUUID());
+                        && !HOOK_ENCOUNTERS.wasUsed(activeBobber.getUUID(), hookedMob.getUUID())
+                        && !hookedMob.getUUID().equals(recoveryAttemptMob);
                 if (recoveryRetryTicks == 0 || newMobEncounter) {
                     beginRecast(client, activeBobber, true, false);
                 } else {
@@ -428,7 +452,12 @@ public class FishHelperClient implements ClientModInitializer {
                 }
                 return;
             }
-            if (rareCreatureTicks > 0) { rareCreatureTicks--; return; }
+            if (rareCreatureTicks > 0) {
+                if (--rareCreatureTicks == 0 && rareRestoreSlot >= 0) {
+                    player.getInventory().setSelectedSlot(rareRestoreSlot); rareRestoreSlot = -1;
+                }
+                return;
+            }
             if (pendingRecast && fishingAction < 0) {
                 if (recoveryRetryTicks == 0) beginRecast(client, activeBobber, false, false);
                 return;
@@ -455,13 +484,9 @@ public class FishHelperClient implements ClientModInitializer {
                 bobberWasActive = false;
             } else if (newBobber || !bobberWasActive) {
                 bobberWasActive = true;
-                if (fishingAction < 0) {
+                if (fishingAction < 0 && Config.INSTANCE.petSwapEnabled) {
                     fishingAction = 5;
-                    actionTimer = ThreadLocalRandom.current().nextInt(2, 5);
-                    petMenuWaitTicks = 0;
-                    petMenuRetryTicks = 0;
-                    petEquipAttempted = false;
-                    petMenuSeen = false;
+                    actionTimer = 0;
                 }
             }
 
@@ -501,7 +526,6 @@ public class FishHelperClient implements ClientModInitializer {
                 } else if (fishingAction == 4) {
                     if (findActionWeaponHotbarSlot(player) == player.getInventory().getSelectedSlot()) {
                         client.gameMode.useItem(player, InteractionHand.MAIN_HAND);
-                        sosFlarePending = true;
                     }
 
                     fishingAction = 2;
@@ -513,98 +537,19 @@ public class FishHelperClient implements ClientModInitializer {
                     actionTimer = ThreadLocalRandom.current().nextInt(4, 6);
                 } else if (fishingAction == 3) {
                     beginRecast(client, actionHook, null, false, true);
-                } else if (fishingAction == 5) {
-                    if (activeBobber == null) {
-                        // Wait for the cast to be visible before opening Pets; the hook can vanish between detection and this step.
-                        if (++petMenuWaitTicks >= 40) finishFishingAction();
-                        else actionTimer = 1;
-                        return;
+                } else if (fishingAction == 5 || fishingAction == 6) {
+                    if (!Config.INSTANCE.petSwapEnabled || Config.INSTANCE.selectedPet == null) {
+                        finishFishingAction(); return;
                     }
-                    petMenuWaitTicks = 0;
-                    if (!(client.screen instanceof AbstractContainerScreen<?> screen
-                            && isPetsMenu(screen.getTitle().getString()))) {
-                        player.connection.sendCommand("pets");
-                        player.sendSystemMessage(Component.literal(STATUS_PREFIX + " sending /pets"));
-                    }
+                    if (petSwap == null) petSwap = new PetSwapSequence(Config.INSTANCE.petCommandDelayTicks);
                     fishingAction = 6;
-                    actionTimer = ThreadLocalRandom.current().nextInt(2, 4);
-                    petMenuRetryTicks = 0;
-                    petEquipAttempted = false;
-                    petMenuSeen = false;
-                } else if (fishingAction == 11) {
-                    actionWeaponSlotForAction = findFlareHotbarSlot(player);
-                    if (actionWeaponSlotForAction < 0) { restoreActionRod(player); finishFishingAction(); return; }
-                    player.getInventory().setSelectedSlot(actionWeaponSlotForAction);
-                    fishingAction = 12;
-                    actionTimer = randomSwapDelayTicks();
-                } else if (fishingAction == 12) {
-                    if (hasNearbyFlareOrPlasmaflux(client, player) || findFlareHotbarSlot(player) != player.getInventory().getSelectedSlot()) {
-                        restoreActionRod(player);
-                        finishFishingAction();
-                    } else {
-                        client.gameMode.useItem(player, InteractionHand.MAIN_HAND);
-                        flarePlacementCooldown = 3 * 60 * 20;
-                        fishingAction = 13;
-                        actionTimer = 2;
-                    }
-                } else if (fishingAction == 13) {
-                    beginRecast(client, actionHook, null, false, false);
-                } else {
-                    if (activeBobber == null) {
-                        if (client.screen instanceof AbstractContainerScreen<?> screen
-                                && isPetsMenu(screen.getTitle().getString())) {
-                            client.setScreen(null);
-                        }
-                        finishFishingAction();
-                        return;
-                    }
-                    int petMenuSlot = 9 + Math.max(1, Math.min(7, Config.INSTANCE.petNumber));
-                    if (client.screen instanceof AbstractContainerScreen<?> screen
-                            && isPetsMenu(screen.getTitle().getString())
-                            && screen.getMenu().slots.size() > petMenuSlot) {
-                        petMenuSeen = true;
-                        var petStack = screen.getMenu().slots.get(petMenuSlot).getItem();
-                        if (hasPetTooltip(petStack, client, player, "click to despawn")) {
-                            // It was already equipped, or the server did not close after the two-second check.
-                            client.setScreen(null);
-                            finishFishingAction();
-                            return;
-                        } else if (hasPetTooltip(petStack, client, player, "left-click to summon")) {
-                            petMenuWaitTicks = 0;
-                            int retryDelay = petEquipAttempted ? 20 : 3;
-                            if (++petMenuRetryTicks >= retryDelay) {
-                                client.gameMode.handleContainerInput(
-                                        screen.getMenu().containerId,
-                                        petMenuSlot,
-                                        0,
-                                        ContainerInput.PICKUP,
-                                        player
-                                );
-                                petEquipAttempted = true;
-                                petMenuRetryTicks = 0;
-                            }
-                            actionTimer = 1;
-                        } else if (++petMenuWaitTicks >= 100) {
-                            client.setScreen(null);
-                            finishFishingAction();
-                        } else {
-                            actionTimer = 1;
-                        }
-                    } else if (++petMenuWaitTicks >= 20) {
-                        if (client.screen instanceof AbstractContainerScreen<?> screen
-                                && isPetsMenu(screen.getTitle().getString())) {
-                            client.setScreen(null);
-                        }
-                        finishFishingAction();
-                    } else {
-                        petMenuRetryTicks = 0;
-                        actionTimer = 1;
-                    }
+                    petSwap.tick(PetMenus.controls(client));
+                    if (!petSwap.active()) { finishFishingAction(); WATCHDOG.interrupted(); }
                 }
                 return;
             }
 
-            if (!normalRod.select()) {
+            if (Config.INSTANCE.autoRodSwap && !normalRod.select()) {
                 reportProblem(player, "rod", "Waiting for a fishing rod in the hotbar or offhand");
                 return;
             }
@@ -650,24 +595,16 @@ public class FishHelperClient implements ClientModInitializer {
                 return;
             }
 
-            // Wait until the current rod/action-weapon/pet sequence is finished. A flare is
-            // queued only after an action-weapon use and placed on a later idle tick.
-            if (sosFlarePending && flarePlacementCooldown == 0
-                    && Config.INSTANCE.flareTier != Config.FlareTier.NONE
-                    && !hasNearbyFlareOrPlasmaflux(client, player)) {
-                int flareSlot = findFlareHotbarSlot(player);
-                if (flareSlot >= 0) {
-                    rodHandForAction = rodHand;
-                    actionHook = hookUuid(bobber);
-                    rodSelectedSlotForAction = player.getInventory().getSelectedSlot();
-                    actionWeaponSlotForAction = flareSlot;
-                    fishingAction = 11;
-                    actionTimer = randomSwapDelayTicks();
-                    sosFlarePending = false;
+            // The periodic check can wait behind any input owner; only an idle tick starts placement.
+            if (sosFlarePending) {
+                sosFlarePending = false;
+                int required = Config.INSTANCE.flareTier.ordinal();
+                if (required > 0 && !FlareFeature.nearby(client, required) && FlareFeature.find(player, required) >= 0) {
+                    flare = new FlareFeature(client);
+                    WATCHDOG.interrupted();
                     return;
                 }
             }
-
             boolean normalWait = bobber != null && !HOOK_ENCOUNTERS.wasReeled(bobber.getUUID())
                     && (bobber.isInWater() || bobber.isInLava() || hasValidHookCountdown(client, bobber)
                         || Config.INSTANCE.slugfishReelEnabled && !slugfishWaitComplete);
@@ -677,6 +614,8 @@ public class FishHelperClient implements ClientModInitializer {
     }
 
     private static int findActionWeaponHotbarSlot(LocalPlayer player) {
+        if (Config.INSTANCE.actionWeapon == Config.ActionWeapon.HYPERION)
+            return HyperionAccess.find(player, HyperionPolicy.Kind.CHIMERA);
         String search = Config.INSTANCE.actionWeapon.searchName;
         if (search.isEmpty()) {
             return -1;
@@ -706,6 +645,8 @@ public class FishHelperClient implements ClientModInitializer {
             else return;
         }
         finishHookRecovery(); // Restores the rod slot before Thunder takes its snapshot.
+        finishFlare();
+        finishRareCreature(client.player);
         int restoreSlot = rodSelectedSlotForAction >= 0 ? rodSelectedSlotForAction
                 : hotspotRadarRestoreSlot >= 0 ? hotspotRadarRestoreSlot
                 : client.player.getInventory().getSelectedSlot();
@@ -755,11 +696,12 @@ public class FishHelperClient implements ClientModInitializer {
 
     private static void beginRecast(Minecraft client, UUID hook, UUID mob, boolean attack, boolean pet) {
         if (!enabled || JAWBUS_PAUSE.active() || hookRecovery != null || thunderResponse != null || client.player == null || client.screen != null) return;
+        finishRareCreature(client.player);
+        if (attack) recoveryAttemptMob = mob;
         hookRecovery = new HookRecoveryFeature(client, hook, mob, rodSelectedSlotForAction, rodHandForAction, attack, HOOK_ENCOUNTERS);
         petAfterRecovery = pet;
         pendingRecast = false;
         finishFishingAction();
-        if (!pet) sosFlarePending = false;
         ACTION_DEADLINE.reset();
     }
 
@@ -767,7 +709,7 @@ public class FishHelperClient implements ClientModInitializer {
         if (player == null) return;
         if (rodSelectedSlotForAction >= 0 || rodHandForAction != null)
             new RodAccess(player, rodSelectedSlotForAction, rodHandForAction).restore();
-        else if (normalRod != null) normalRod.restore();
+        else if (normalRod != null && fishingAction >= 0) normalRod.restore();
     }
 
     private static void reportProblem(LocalPlayer player, String key, String text) {
@@ -880,6 +822,8 @@ public class FishHelperClient implements ClientModInitializer {
         if (player == null) {
             return;
         }
+        finishFlare();
+        if (petSwap != null) { petSwap.cancel(); petSwap = null; }
 
         hoppityPauseTicks = 10 * 20;
         hoppityAwaitingYes = true;
@@ -891,10 +835,6 @@ public class FishHelperClient implements ClientModInitializer {
         }
         fishingAction = -1;
         actionTimer = 0;
-        petMenuWaitTicks = 0;
-        petMenuRetryTicks = 0;
-        petEquipAttempted = false;
-        petMenuSeen = false;
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
         actionWeaponSlotForAction = -1;
@@ -902,25 +842,6 @@ public class FishHelperClient implements ClientModInitializer {
 
         sendChatClickCommand(player, pickupCommand);
         player.sendSystemMessage(Component.literal(STATUS_PREFIX + " §eHoppity call picked up; fishing paused for 10 seconds"));
-    }
-
-    private static int findFlareHotbarSlot(LocalPlayer player) {
-        String search = Config.INSTANCE.flareTier.searchName;
-        if (search.isEmpty()) {
-            return -1;
-        }
-        for (int slot = 0; slot < 9; slot++) {
-            var stack = player.getInventory().getItem(slot);
-            if (!stack.isEmpty()) {
-                String name = stack.getHoverName().getString()
-                        .replaceAll("(?i)§[0-9A-FK-OR]", "")
-                        .toLowerCase(java.util.Locale.ROOT);
-                if (name.contains(search)) {
-                    return slot;
-                }
-            }
-        }
-        return -1;
     }
 
     private static int findHotspotRadarHotbarSlot(LocalPlayer player) {
@@ -959,10 +880,6 @@ public class FishHelperClient implements ClientModInitializer {
         // The hotspot has ended, so discard any partially completed fishing action.
         fishingAction = -1;
         actionTimer = 0;
-        petMenuWaitTicks = 0;
-        petMenuRetryTicks = 0;
-        petEquipAttempted = false;
-        petMenuSeen = false;
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
         actionWeaponSlotForAction = -1;
@@ -977,27 +894,6 @@ public class FishHelperClient implements ClientModInitializer {
         hotspotRadarTimer = 0;
         hotspotRadarSlot = -1;
         hotspotRadarRestoreSlot = -1;
-    }
-
-    private static boolean hasNearbyFlareOrPlasmaflux(
-            net.minecraft.client.Minecraft client,
-            LocalPlayer player
-    ) {
-        String flareSearch = Config.INSTANCE.flareTier.searchName;
-        for (Entity entity : client.level.entitiesForRendering()) {
-            if (entity instanceof ArmorStand stand
-                    && stand.hasCustomName()
-                    && stand.distanceTo(player) <= 40.0) {
-                String name = stand.getCustomName().getString()
-                        .replaceAll("(?i)§[0-9A-FK-OR]", "")
-                        .toLowerCase(java.util.Locale.ROOT);
-                if ((!flareSearch.isEmpty() && name.contains(flareSearch))
-                        || (name.contains("plasmaflux") && name.contains("power orb"))) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private static void trackHotspot(
@@ -1075,7 +971,7 @@ public class FishHelperClient implements ClientModInitializer {
     }
 
     private static boolean isPetsMenu(String title) {
-        return title.matches("(?i)(?:\\(\\d+/\\d+\\)\\s*)?Pets");
+        return PetMenus.title(title);
     }
 
     private static boolean shouldCloseMenuForReel(Minecraft client, LocalPlayer player) {
@@ -1105,6 +1001,8 @@ public class FishHelperClient implements ClientModInitializer {
     static void registerCommands(com.mojang.brigadier.CommandDispatcher<net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource> dispatcher) {
         for (String alias : java.util.List.of("fa", "fuschen")) {
             dispatcher.register(ClientCommands.literal(alias)
+                    .then(ClientCommands.literal("movement").then(ClientCommands.literal("center")
+                            .executes(context -> RandomMovementFeature.setCenter(Minecraft.getInstance()))))
                     .then(ClientCommands.literal("gui").executes(context -> queueScreen(true)))
                     .executes(context -> queueScreen(false)));
         }
@@ -1139,6 +1037,7 @@ public class FishHelperClient implements ClientModInitializer {
         OwnedHookResolver.reset();
         SeaCreatureTracker.INSTANCE.reset();
         ThunderMuter.reset();
+        RandomMovementFeature.reset(Minecraft.getInstance());
         if (wasEnabled && player != null) player.sendSystemMessage(Component.literal(
                 STATUS_PREFIX + " §eOFF (server/world changed; activate FishHelper manually when ready)"));
     }
@@ -1150,15 +1049,18 @@ public class FishHelperClient implements ClientModInitializer {
     }
 
     private static void beginJawbusPause(Minecraft client) {
+        RandomMovementFeature.suspend(client);
         resetFishingActions(client.player, true);
         client.player.sendSystemMessage(Component.literal(STATUS_PREFIX + " §eJawbus nearby; fishing paused"));
     }
 
     /** Cancels every queued fishing input without clearing independent Hoppity/menu waits. */
     private static void resetFishingActions(LocalPlayer player, boolean restore) {
+        finishFlare();
         finishHookRecovery();
         finishThunderResponse();
         if (restore && player != null) {
+            finishRareCreature(player);
             if (hotspotRadarRestoreSlot >= 0) restoreHotspotRadarSlot(player);
             restoreActionRod(player);
         }
@@ -1167,7 +1069,9 @@ public class FishHelperClient implements ClientModInitializer {
         GrinchAutoClickerFeature.reset();
         normalRod = null;
         pendingRecast = petAfterRecovery = false;
-        recoveryRetryTicks = rareCreatureTicks = flarePlacementCooldown = 0;
+        recoveryAttemptMob = null;
+        recoveryRetryTicks = rareCreatureTicks = flareCheckTicks = 0;
+        rareRestoreSlot = -1;
         sosFlarePending = false;
         biteAlertHandled = bobberTrackingInitialized = bobberWasActive = false;
         bobberActiveTicks = 0; trackedBobberUuid = null;
@@ -1226,35 +1130,26 @@ public class FishHelperClient implements ClientModInitializer {
         }
     }
 
-    private static boolean hasPetTooltip(
-            net.minecraft.world.item.ItemStack stack,
-            Minecraft client,
-            LocalPlayer player,
-            String target
-    ) {
-        String storedText = stack.getComponents().toString() + " " + stack.getHoverName().getString();
-        if (storedText.toLowerCase(java.util.Locale.ROOT).contains(target)) {
-            return true;
-        }
-
-        Item.TooltipContext context = Item.TooltipContext.of(client.level);
-        return java.util.List.of(TooltipFlag.NORMAL, TooltipFlag.ADVANCED).stream()
-                .flatMap(flag -> stack.getTooltipLines(context, player, flag).stream())
-                .map(Component::getString)
-                .map(line -> line.toLowerCase(java.util.Locale.ROOT))
-                .anyMatch(line -> line.contains(target));
-    }
-
     private static void finishFishingAction() {
+        if (petSwap != null) { petSwap.cancel(); petSwap = null; }
         fishingAction = -1;
         actionTimer = 0;
-        petMenuWaitTicks = 0;
-        petMenuRetryTicks = 0;
-        petEquipAttempted = false;
-        petMenuSeen = false;
         rodHandForAction = null;
         rodSelectedSlotForAction = -1;
         actionWeaponSlotForAction = -1;
         actionHook = null;
+    }
+
+    private static void finishFlare() { if (flare != null) { flare.finish(); flare = null; } }
+
+    private static void finishRareCreature(LocalPlayer player) {
+        if (player != null && rareRestoreSlot >= 0) player.getInventory().setSelectedSlot(rareRestoreSlot);
+        rareRestoreSlot = -1; rareCreatureTicks = 0;
+    }
+
+    /** Movement can never take input during an exclusive fishing action or pause. */
+    public static boolean movementPaused() {
+        return JAWBUS_PAUSE.active() || thunderResponse != null || hookRecovery != null || flare != null
+                || fishingAction >= 0 || hotspotRadarStage > 0 || hoppityPauseTicks > 0 || rareCreatureTicks > 0;
     }
 }

@@ -7,6 +7,7 @@ import foo.starred.cascade.graphics.geometry.CascadeGeometricColor
 import foo.starred.cascade.graphics.font.CascadeFonts
 import net.minecraft.client.KeyMapping
 import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.components.AbstractSliderButton
 import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.components.Tooltip
@@ -28,6 +29,8 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
     private var scroll = 0
     private var listeningForKey = false
     private var keyButton: Button? = null
+    private var bindingId = "toggle"
+    private var consumeMouseRelease = false
     private val rows = mutableListOf<Row>()
     private var panelX = 0
     private var panelY = 0
@@ -59,11 +62,28 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                 choice("Action weapon", "Weapon used after a catch", Config.ActionWeapon.values().map { it.displayName }, { config.actionWeapon.ordinal }) {
                     config.actionWeapon = Config.ActionWeapon.values()[it]
                 }
-                choice("Flare", "Place when no nearby flare or Plasmaflux is active", Config.FlareTier.values().map { it.displayName }, { config.flareTier.ordinal }) {
+                choice("Flare", "Check every 10 seconds; selected tier or higher within 40 blocks", Config.FlareTier.values().map { it.displayName }, { config.flareTier.ordinal }) {
                     config.flareTier = Config.FlareTier.values()[it]
                 }
-                choice("Fishing pet", "Position in the Pets menu (1–7)", (1..7).map { "Pet $it" }, { config.petNumber - 1 }) {
-                    config.petNumber = it + 1
+                toggle("Auto pet swap", "Disable all automatic /pets commands and pet clicks", { config.petSwapEnabled }) { config.petSwapEnabled = it }
+                number("Delay before /pets", "Client ticks before sending /pets (20 ticks = 1 s; default 5)", { config.petCommandDelayTicks.toString() }, false) {
+                    config.petCommandDelayTicks = it.toInt().coerceIn(0, 200)
+                }
+                rows += Row("Fishing pet", config.selectedPet?.name() ?: "Read your /pets pages, then choose a pet") { x, y, w ->
+                    button(x, y, w, "Choose pet") { minecraft.setScreen(PetSelectionScreen(this)) }
+                }
+                toggle("Auto-Swap zur Angel außerhalb der Fishing-Sequenz", "Idle rod selection only; active actions still restore their rod", { config.autoRodSwap }) { config.autoRodSwap = it }
+                number("Flare swap delay", "Client ticks between select / use / restore (default 3 = 150 ms)", { config.flareSwapDelayTicks.toString() }, false) {
+                    config.flareSwapDelayTicks = it.toInt().coerceIn(1, 20)
+                }
+                choice("Hyperions", "Chimera for kills; Ultimate Wise lowers Thunder above 3M HP", listOf("1 Hyperion", "2 Hyperions"), { if (config.twoHyperions) 1 else 0 }) {
+                    config.twoHyperions = it == 1
+                    rebuild()
+                }
+                if (config.twoHyperions) {
+                    slotSlider("Ultimate-Wise-Hyperion", "Hotbar slot 1–9; must contain an Ultimate Wise Hyperion", { config.ultimateWiseSlot }) { config.ultimateWiseSlot = it }
+                    slotSlider("Chimera-Hyperion", "Different hotbar slot 1–9; must contain a Chimera Hyperion", { config.chimeraSlot }) { config.chimeraSlot = it }
+                    info("Slot validation", if (minecraft.player?.let { HyperionAccess.validPair(it) } == true) "Both Hyperion slots verified" else "Slots invalid or items not verified; no Hyperion use")
                 }
                 toggle("Slugfish timing", "Wait 10 seconds, adjusted for your ping", { config.slugfishReelEnabled }) {
                     config.slugfishReelEnabled = it
@@ -85,10 +105,10 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                 toggle("Thunder response", "Interrupt fishing when your Thunder spawn message appears", { config.thunderResponseEnabled }) {
                     config.thunderResponseEnabled = it
                 }
-                info("01  Aim and freeze", "Face Thunder; use Ice Spray Wand if it is in your hotbar.")
-                info("02  Ink Wand", "Keep aiming at Thunder and use Ink Wand if available.")
-                info("03  Hyperion", "Look down; use at 5 CPS within 5 blocks. Wait outside range until all tracked Thunder are gone.")
-                info("Return to fishing", "Restore your view and slot. Temporary interruptions resume automatically.")
+                info("01  Ice Spray", "Use in your current view direction; your camera stays under your control.")
+                info("02  Ink Wand", "Use Ink Wand in your current view direction if available.")
+                info("03  Hyperion", "Current view, 5 CPS within 5 blocks. Two Hyperions: switch to Chimera at 3M HP; unknown HP also uses Chimera.")
+                info("Return to fishing", "Restore the slot only. No camera changes on completion or cancellation.")
             }
             Tab.GENERAL -> {
                 toggle("Sea Creature healthbar", "Show HP from creature nametags; keep the nearest target until it leaves", { config.seaCreatureHealthbarEnabled }) {
@@ -97,13 +117,9 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                 rows += Row("Healthbar position", "Drag the preview to move it · /fa gui") { x, y, w ->
                     button(x, y, w, "Edit HUD") { minecraft.setScreen(HudEditorScreen(this)) }
                 }
-                rows += Row("Start / stop key", "Click to bind a keyboard key; Escape cancels") { x, y, w ->
-                    keyButton = button(x, y, w, keyLabel()) {
-                        listeningForKey = true
-                        keyButton?.message = Component.literal("Press a key...")
-                    }
-                    keyButton?.setTooltip(Tooltip.create(Component.literal("Start / stop fishing key")))
-                }
+                binding("Start / stop key", "toggle")
+                binding("Config key", "config")
+                binding("Movement key", "movement")
                 toggle("Grinch auto clicker", "Left-click a hooked Grinch under the crosshair", { config.grinchAutoClickerEnabled }) {
                     config.grinchAutoClickerEnabled = it
                 }
@@ -113,7 +129,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                 toggle("Hoppity auto-buy", "Buy offered rabbits only when they are not already owned", { config.autoBuyHoppityRabbit }) {
                     config.autoBuyHoppityRabbit = it
                 }
-                toggle("Random movement", "Allow the movement keybind (default K)", { config.randomMovementEnabled }) {
+                toggle("Random movement", "Set /fa movement center, then toggle bounded movement (default K)", { config.randomMovementEnabled }) {
                     config.randomMovementEnabled = it
                 }
             }
@@ -183,6 +199,13 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
     }
 
     override fun mouseClicked(event: MouseButtonEvent, isDoubleClick: Boolean): Boolean {
+        if (listeningForKey) {
+            ModBindings.bind(bindingId, InputConstants.Type.MOUSE.getOrCreate(event.button()))
+            listeningForKey = false
+            keyButton?.message = Component.literal(keyLabel(bindingId))
+            consumeMouseRelease = true
+            return true
+        }
         val menu = dropdown
         if (menu != null) {
             val row = dropdownLayout(menu).rowAt(event.x(), event.y())
@@ -214,7 +237,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                     Config.save()
                 }
             }
-            field.setHint(Component.literal(if (decimal) "3–15" else "ms"))
+            field.setHint(Component.literal(if (decimal) "3–15" else ""))
             field.setTooltip(Tooltip.create(Component.literal(detail)))
             addRenderableWidget(field)
         }
@@ -224,7 +247,36 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
         return addRenderableWidget(CascadeButton(x, y, w, 26, Component.literal(text), selected, press))
     }
 
-    private fun keyLabel() = if (listeningForKey) "Press a key..." else toggleKey.translatedKeyMessage.string
+    private fun binding(title: String, id: String) {
+        rows += Row(title, "Keyboard or mouse button (including side buttons); Escape cancels") { x, y, w ->
+            button(x, y, w, keyLabel(id)) { current ->
+                bindingId = id
+                keyButton = current
+                listeningForKey = true
+                current.message = Component.literal("Key / mouse...")
+            }
+        }
+    }
+    private fun keyLabel(id: String) = ModBindings.get(id)?.translatedKeyMessage?.string ?: "Unbound"
+    override fun mouseReleased(event: MouseButtonEvent): Boolean {
+        if (consumeMouseRelease) { consumeMouseRelease = false; return true }
+        return super.mouseReleased(event)
+    }
+    private fun slotSlider(title: String, detail: String, get: () -> Int, set: (Int) -> Unit) {
+        rows += Row(title, detail) { x, y, w ->
+            addRenderableWidget(object : AbstractSliderButton(x, y, w, 26, Component.literal("Slot ${get()}"), (get() - 1) / 8.0) {
+                override fun updateMessage() { message = Component.literal("Slot ${(1 + kotlin.math.round(value * 8).toInt()).coerceIn(1, 9)}") }
+                override fun applyValue() { set((1 + kotlin.math.round(value * 8).toInt()).coerceIn(1, 9)); Config.save() }
+                override fun keyPressed(event: KeyEvent): Boolean {
+                    if (event.key() == GLFW.GLFW_KEY_LEFT || event.key() == GLFW.GLFW_KEY_RIGHT) {
+                        value = ((get() + if (event.key() == GLFW.GLFW_KEY_RIGHT) 1 else -1).coerceIn(1, 9) - 1) / 8.0
+                        applyValue(); updateMessage(); return true
+                    }
+                    return super.keyPressed(event)
+                }
+            }).setTooltip(Tooltip.create(Component.literal(detail)))
+        }
+    }
 
     override fun keyPressed(event: KeyEvent): Boolean {
         dropdown?.let { menu ->
@@ -242,13 +294,11 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
         }
         if (listeningForKey) {
             if (event.key() != InputConstants.KEY_ESCAPE) {
-                Config.INSTANCE.toggleKeyCode = event.key()
-                toggleKey.setKey(InputConstants.getKey(event))
-                KeyMapping.resetMapping()
-                Config.save()
+                if (bindingId == "toggle") Config.INSTANCE.toggleKeyCode = event.key()
+                ModBindings.bind(bindingId, InputConstants.getKey(event))
             }
             listeningForKey = false
-            keyButton?.message = Component.literal(keyLabel())
+            keyButton?.message = Component.literal(keyLabel(bindingId))
             return true
         }
         return super.keyPressed(event)
@@ -294,7 +344,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
             val detail = ellipsize(row.detail, textWidth, 9)
             drawText(graphics, detail, panelX + 22, y + 23, MUTED, 9)
             if (dropdown == null && mouseX >= panelX + 12 && mouseX < panelX + panelWidth - 12 && mouseY >= y && mouseY < y + 39) {
-                graphics.setTooltipForNextFrame(Component.literal(row.detail), mouseX, mouseY)
+                graphics.setTooltipForNextFrame(Component.literal("${row.title}: ${row.detail}"), mouseX, mouseY)
             }
         }
         val last = min(scroll + visibleRows, rows.size)
@@ -332,13 +382,13 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
     override fun onClose() {
         dropdown = null
         listeningForKey = false
-        Config.save()
+        ModBindings.saveBindings()
         minecraft.setScreen(parent)
     }
 
     override fun isPauseScreen() = false
 
-    private class CascadeButton(x: Int, y: Int, w: Int, h: Int, label: Component, var selected: Boolean, press: (CascadeButton) -> Unit) :
+    internal class CascadeButton(x: Int, y: Int, w: Int, h: Int, label: Component, var selected: Boolean, press: (CascadeButton) -> Unit) :
         Button(x, y, w, h, label, OnPress { press(it as CascadeButton) }, DEFAULT_NARRATION) {
         override fun extractContents(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, delta: Float) {
             graphics.nextStratum()
@@ -369,7 +419,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
         private fun ellipsize(text: String, maxWidth: Int, size: Int): String =
             CascadeFonts.sans.truncate(text, size, maxWidth, "…", cached = true)
 
-        private fun drawText(graphics: GuiGraphicsExtractor, text: String, x: Number, y: Number, color: Int, size: Int) {
+        internal fun drawText(graphics: GuiGraphicsExtractor, text: String, x: Number, y: Number, color: Int, size: Int) {
             CascadeFonts.sans.extract(graphics, text, x, y, CascadeGeometricColor(color), shadow = false, size = size)
         }
     }
