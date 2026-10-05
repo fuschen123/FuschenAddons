@@ -1,4 +1,4 @@
-# FuschenAddons 0.0.57
+# FuschenAddons 0.0.58
 
 Client-side fishing helper by fuschen. Built for **Minecraft 26.1.2, Java 25,
 Fabric Loader >= 0.19.5 and Fabric API**. Cascade `2026.09.7+26.1` is bundled.
@@ -44,6 +44,8 @@ Open actual `/pets` pages to populate **Fishing pet -> Choose pet**. The picker
 shows a seven-column, four-row pet-head grid in the exact positions of each observed
 menu page, including gaps. Use the page arrows or mouse wheel to change pages.
 Rarity borders, hover details and a highlighted selected pet help identify each pet.
+Favorited pets with a leading star are included. Adding or removing the favorite
+marker preserves the pet identity and selection; reopen the page to refresh its position.
 Head appearances and positions survive restarts. Existing installations must revisit
 their `/pets` pages once to capture these new visual details; their selected pet is retained.
 Unread pages show a prompt to open that page instead of invented entries. Only observed

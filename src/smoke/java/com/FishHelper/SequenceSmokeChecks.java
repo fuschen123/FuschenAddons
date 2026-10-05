@@ -101,13 +101,13 @@ final class SequenceSmokeChecks {
             String a="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",b="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
             Config.INSTANCE.selectedPet=PetMenus.read(pet(a,false));
             t.toggle(c);t.mod("fishingAction",6);t.mod("actionTimer",0);
-            var menu=pets(c,"Pets (1/2)");menu.slots.get(10).set(pet(a,false));menu.slots.get(11).set(pet(b,false));
-            input.clicks.clear();ticks(t,c,input,1);t.check(input.clicks.equals(List.of(10)),"first pet click resolves UUID");
+            var menu=pets(c,"Pets (1/2)");menu.slots.get(10).set(PetGridSmokeChecks.favorite(pet(a,false),"⭐"));menu.slots.get(11).set(pet(b,false));
+            input.clicks.clear();ticks(t,c,input,1);t.check(input.clicks.equals(List.of(10)),"first pet click resolves a favorited pet by UUID");
             menu.slots.get(10).set(ItemStack.EMPTY);menu.slots.get(20).set(pet(a,false));
             ticks(t,c,input,19);t.check(input.clicks.size()==1,"no retry before twenty ticks");ticks(t,c,input,1);
             t.check(input.clicks.equals(List.of(10,20)),"retry resolves moved pet rather than stale slot");
-            menu.slots.get(20).set(pet(a,true));ticks(t,c,input,1);
-            t.check(input.clicks.size()==2 && c.screen==null && (int)t.mod("fishingAction")==-1,"active tooltip confirms swap without despawn");
+            menu.slots.get(20).set(PetGridSmokeChecks.favorite(pet(a,true),"★"));ticks(t,c,input,1);
+            t.check(input.clicks.size()==2 && c.screen==null && (int)t.mod("fishingAction")==-1,"active favorite confirms swap without despawn");
             t.check(Config.INSTANCE.petPages.size()==1 && Config.INSTANCE.petPageCount==2,"only observed pages cached");
             t.mod("fishingAction",6);menu=pets(c,"Bank");menu.slots.get(10).set(pet(a,false));ticks(t,c,input,50);
             t.check(input.clicks.size()==2 && c.screen!=null,"foreign menu never clicked or closed");c.player.closeContainer();

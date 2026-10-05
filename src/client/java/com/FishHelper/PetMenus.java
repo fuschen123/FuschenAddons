@@ -16,7 +16,8 @@ import java.util.regex.Pattern;
 /** Reads only actual server-menu stacks. Never scans or fabricates unopened pages. */
 public final class PetMenus {
     public record Entry(int slot, PetIdentity pet, boolean active, boolean summon) { }
-    private static final Pattern LEVEL = Pattern.compile("^\\[Lvl?\\s*(\\d+)]\\s*(.+)$", Pattern.CASE_INSENSITIVE);
+    // A favorite marker decorates the name; it must not change the pet's identity.
+    private static final Pattern LEVEL = Pattern.compile("^(?:[⭐★]\\x{FE0F}?\\h*)?\\[Lvl?\\s*(\\d+)]\\s*(.+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern PAGE = Pattern.compile("\\((\\d+)\\s*/\\s*(\\d+)\\)");
     private static String previous = "";
     private static int stableTicks;
