@@ -29,11 +29,13 @@ public class Config {
     public int petCommandDelayTicks = 5;
     public PetIdentity selectedPet;
     public java.util.Map<Integer, java.util.List<PetIdentity>> petPages = new java.util.TreeMap<>();
+    public java.util.Map<Integer, java.util.List<PetMenuSlot>> petMenuPages = new java.util.TreeMap<>();
     public int petPageCount = 1;
     public boolean autoRodSwap = true;
     /** Delay between flare slot selection, use and restoration (default 3 ticks / 150 ms). */
     public int flareSwapDelayTicks = 3;
     public boolean twoHyperions = false;
+    public boolean autoDetectHyperions = true;
     public int ultimateWiseSlot = 1;
     public int chimeraSlot = 2;
 
@@ -140,6 +142,7 @@ public class Config {
                     INSTANCE.ultimateWiseSlot = Math.max(1, Math.min(9, INSTANCE.ultimateWiseSlot));
                     INSTANCE.chimeraSlot = Math.max(1, Math.min(9, INSTANCE.chimeraSlot));
                     if (INSTANCE.petPages == null) INSTANCE.petPages = new java.util.TreeMap<>();
+                    if (INSTANCE.petMenuPages == null) INSTANCE.petMenuPages = new java.util.TreeMap<>();
                     JsonObject savedConfig = JsonParser.parseString(json).getAsJsonObject();
                     if (!savedConfig.has("actionWeapon") && savedConfig.has("useHyperion")) {
                         INSTANCE.actionWeapon = savedConfig.get("useHyperion").getAsBoolean()

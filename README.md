@@ -1,4 +1,4 @@
-# FuschenAddons 0.0.56
+# FuschenAddons 0.0.57
 
 Client-side fishing helper by fuschen. Built for **Minecraft 26.1.2, Java 25,
 Fabric Loader >= 0.19.5 and Fabric API**. Cascade `2026.09.7+26.1` is bundled.
@@ -40,7 +40,13 @@ The command is sent only once per transaction. A foreign menu aborts the transac
 Menu arrival has a five-second limit; the whole transaction has a 30-second limit
 plus the configured delay, after which fishing continues without disabling the helper.
 
-Open actual `/pets` pages to populate **Fishing pet -> Choose pet**. Only observed
+Open actual `/pets` pages to populate **Fishing pet -> Choose pet**. The picker
+shows a seven-column, four-row pet-head grid in the exact positions of each observed
+menu page, including gaps. Use the page arrows or mouse wheel to change pages.
+Rarity borders, hover details and a highlighted selected pet help identify each pet.
+Head appearances and positions survive restarts. Existing installations must revisit
+their `/pets` pages once to capture these new visual details; their selected pet is retained.
+Unread pages show a prompt to open that page instead of invented entries. Only observed
 name, rarity, level and held-item information is displayed, with `Unknown` for data
 not supplied by the server. Pet UUIDs are preferred over slot numbers and survive
 reordering/level changes. If no UUID is supplied, all menu pages must have been read
@@ -112,8 +118,14 @@ once joined, a loaded living Thunder remains relevant even if it moves farther a
    Restore the slot and resume fishing. No camera rotation or view restoration occurs,
    including on cancellation.
 
-With **2 Hyperions**, configure different hotbar slots 1–9 for Ultimate Wise and
-Chimera. Both items and their actual enchantments must validate before use; changing
+With **2 Hyperions**, **Auto-detect Hyperions** is ON by default. The entire hotbar is
+scanned for the real Hyperion item ID and `ultimate_wise` / `ultimate_chimera` enchantment
+data. Only when enchantment data is absent are exact enchantment entries in the lore
+used as a fallback. Renaming an item to “Chimera Hyperion” does not identify its type.
+The config shows the detected slots live; moving the items updates their assignment.
+Unknown or contradictory types are rejected. Disable automatic detection to retain
+manually assigned slots 1–9, which still require enchantment validation.
+Both items and their actual enchantments must validate before use; changing
 the inventory cannot cause unrelated items to be clicked. Normal catch/hook recovery
 uses Chimera. Thunder uses Ultimate Wise above **3,000,000 HP**, and Chimera at or
 below that threshold. Unknown HP or any tracked Thunder at/below the threshold also

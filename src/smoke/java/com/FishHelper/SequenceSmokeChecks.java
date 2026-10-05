@@ -81,10 +81,12 @@ final class SequenceSmokeChecks {
 
             inv.setItem(0,hyperion("ultimate_wise"));inv.setItem(1,hyperion("ultimate_chimera"));
             Config.INSTANCE.twoHyperions=true;Config.INSTANCE.ultimateWiseSlot=1;Config.INSTANCE.chimeraSlot=2;
+            Config.INSTANCE.autoDetectHyperions=false;
             t.check(HyperionAccess.validPair(c.player),"actual custom-data enchants validate both Hyperions");
             Config.INSTANCE.chimeraSlot=1;t.check(!HyperionAccess.validPair(c.player),"same slot refused");Config.INSTANCE.chimeraSlot=2;
             var chimera=inv.getItem(1);inv.setItem(1,named("Unrelated sword"));
             t.check(HyperionAccess.find(c.player,HyperionPolicy.Kind.ULTIMATE_WISE)<0,"changed hotbar invalidates the pair");inv.setItem(1,chimera);
+            HyperionDetectionSmokeChecks.run(t,c);
 
             var mob=new MagmaCube(EntityType.MAGMA_CUBE,c.level);mob.setId(2_200_010);mob.setPos(c.player.position());c.level.addEntity(mob);hook.attached=mob;
             input.uses.clear();input.now=0;t.toggle(c); // recognition creates the sequence; no use on this tick

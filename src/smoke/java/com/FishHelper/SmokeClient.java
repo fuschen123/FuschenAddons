@@ -178,29 +178,25 @@ public class SmokeClient implements ClientModInitializer {
                 case 9 -> {
                     if(client.level==null || client.player==null || client.screen!=null) {step--; return;}
                     runtimeChecks(client);
-                    Config.INSTANCE.petPages.put(1,java.util.List.of(
-                            new PetIdentity("uuid:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","Flying Fish","LEGENDARY",100,"Washed-up Souvenir"),
-                            new PetIdentity("uuid:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","Flying Fish","LEGENDARY",100,"Washed-up Souvenir"),
-                            new PetIdentity("uuid:cccccccccccccccccccccccccccccccc","Dolphin","EPIC",89,"Unknown")));
-                    Config.INSTANCE.petPageCount=2;
-                    client.setScreen(new PetSelectionScreen(null));
+                    PetGridSmokeChecks.prepare(this, client);
                 }
                 case 10 -> {
                     screenshot("pet-catalog.png");
-                    var chooser=(PetSelectionScreen)client.screen;
-                    var first=chooser.children().stream().filter(e->e instanceof Button b && b.getMessage().getString().contains("#aaaaaa")).map(e->(Button)e).findFirst().orElseThrow();
-                    chooser.mouseClicked(mouse(first.getX()+5,first.getY()+5),false);chooser.mouseReleased(mouse(first.getX()+5,first.getY()+5));
-                    check(Config.INSTANCE.selectedPet.id().equals("uuid:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),"Cascade pet selection distinguishes duplicate names");
-                    Config.load();check(Config.INSTANCE.selectedPet.id().equals("uuid:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),"pet identity persists");
-                    Config.INSTANCE.twoHyperions=true;command("fa");screen=(ConfigScreen)client.screen;value(screen,"scroll",7);rebuild();
+                    PetGridSmokeChecks.verify(this, client);
+                    Config.INSTANCE.twoHyperions=true;Config.INSTANCE.autoDetectHyperions=true;
+                    command("fa");screen=(ConfigScreen)client.screen;value(screen,"scroll",7);rebuild();
                 }
                 case 11 -> {
+                    screenshot("hyperion-detection.png");
+                    Config.INSTANCE.autoDetectHyperions=false;rebuild();
+                }
+                case 12 -> {
                     screenshot("hyperion-slots.png");
                     var slider=screen.children().stream().filter(e->e instanceof net.minecraft.client.gui.components.AbstractSliderButton).findFirst().orElseThrow();
                     int original=Config.INSTANCE.ultimateWiseSlot;
                     slider.keyPressed(key(262));check(Config.INSTANCE.ultimateWiseSlot==Math.min(9,original+1),"slot slider steps in integers");
                     Config.load();check(Config.INSTANCE.ultimateWiseSlot==Math.min(9,original+1),"slot slider persists");
-                    Config.INSTANCE.petPages.clear();Config.INSTANCE.selectedPet=null;Config.INSTANCE.twoHyperions=false;Config.save();
+                    Config.INSTANCE.petPages.clear();Config.INSTANCE.petMenuPages.clear();Config.INSTANCE.selectedPet=null;Config.INSTANCE.twoHyperions=false;Config.save();
                     java.nio.file.Files.writeString(java.nio.file.Path.of("../build/smoke-result.txt"), "PASS");
                     System.out.println("SMOKE_RUNTIME_OK: real client rod slots/offhand, stale hook reconciliation, watchdog, legitimate waits, temporary actions, manual off and world disable");
                     client.stop();
