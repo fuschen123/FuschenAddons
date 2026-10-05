@@ -21,6 +21,21 @@ public class Config {
 
     /** GLFW key code for the start/stop toggle (default O). */
     public int toggleKeyCode = InputConstants.KEY_O;
+    public String toggleBinding;
+    public String configBinding;
+    public String movementBinding;
+    public boolean petSwapEnabled = true;
+    /** Delay before /pets, in client ticks (20 ticks = 1 second). */
+    public int petCommandDelayTicks = 5;
+    public PetIdentity selectedPet;
+    public java.util.Map<Integer, java.util.List<PetIdentity>> petPages = new java.util.TreeMap<>();
+    public int petPageCount = 1;
+    public boolean autoRodSwap = true;
+    /** Delay between flare slot selection, use and restoration (default 3 ticks / 150 ms). */
+    public int flareSwapDelayTicks = 3;
+    public boolean twoHyperions = false;
+    public int ultimateWiseSlot = 1;
+    public int chimeraSlot = 2;
 
     /** Selects the weapon used for the fishing actions; NONE disables weapon swapping. */
     public ActionWeapon actionWeapon = ActionWeapon.HYPERION;
@@ -120,6 +135,11 @@ public class Config {
                     INSTANCE.petNumber = Math.max(1, Math.min(7, INSTANCE.petNumber));
                     INSTANCE.reelPingMs = Math.max(0, Math.min(5000, INSTANCE.reelPingMs));
                     INSTANCE.grinchClickCps = Math.max(3.0, Math.min(15.0, INSTANCE.grinchClickCps));
+                    INSTANCE.petCommandDelayTicks = Math.max(0, Math.min(200, INSTANCE.petCommandDelayTicks));
+                    INSTANCE.flareSwapDelayTicks = Math.max(1, Math.min(20, INSTANCE.flareSwapDelayTicks));
+                    INSTANCE.ultimateWiseSlot = Math.max(1, Math.min(9, INSTANCE.ultimateWiseSlot));
+                    INSTANCE.chimeraSlot = Math.max(1, Math.min(9, INSTANCE.chimeraSlot));
+                    if (INSTANCE.petPages == null) INSTANCE.petPages = new java.util.TreeMap<>();
                     JsonObject savedConfig = JsonParser.parseString(json).getAsJsonObject();
                     if (!savedConfig.has("actionWeapon") && savedConfig.has("useHyperion")) {
                         INSTANCE.actionWeapon = savedConfig.get("useHyperion").getAsBoolean()

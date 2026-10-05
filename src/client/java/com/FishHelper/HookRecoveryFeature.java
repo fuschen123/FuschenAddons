@@ -50,15 +50,17 @@ final class HookRecoveryFeature implements HookRecoverySequence.Controls {
     public boolean selectRod() { return rod.select(); }
     public boolean rodAvailable() { return rod.available(); }
     public boolean selectHyperion() {
-        for (int slot = 0; slot < 9; slot++) {
-            if (ThunderResponseFeature.matches(player.getInventory().getItem(slot), ThunderSequence.Item.HYPERION)) {
-                player.getInventory().setSelectedSlot(slot); return true;
-            }
-        }
-        return false;
+        int slot = HyperionAccess.find(player, HyperionPolicy.Kind.CHIMERA);
+        if (slot < 0) return false;
+        player.getInventory().setSelectedSlot(slot); return true;
+    }
+    public boolean stillHooked() {
+        FishingHook hook = OwnedHookResolver.find(client, player);
+        return hook != null && hook.getUUID().equals(originalHook) && isBlockingMob(hook, player)
+                && hook.getHookedIn().getUUID().equals(mob) && !guard.wasUsed(originalHook, mob);
     }
     public boolean useHyperion() {
-        if (!ThunderResponseFeature.matches(player.getMainHandItem(), ThunderSequence.Item.HYPERION)) return false;
+        if (!stillHooked() || !HyperionAccess.held(player, HyperionPolicy.Kind.CHIMERA)) return false;
         client.gameMode.useItem(player, InteractionHand.MAIN_HAND);
         guard.used(originalHook, mob);
         return true;

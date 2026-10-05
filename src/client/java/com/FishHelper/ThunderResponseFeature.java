@@ -86,6 +86,11 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
 
     @Override
     public boolean select(ThunderSequence.Item item) {
+        if (item == ThunderSequence.Item.HYPERION) {
+            int slot = HyperionAccess.find(player, hyperionKind());
+            if (slot < 0) return false;
+            player.getInventory().setSelectedSlot(slot); return true;
+        }
         for (int slot = 0; slot < 9; slot++) {
             if (matches(player.getInventory().getItem(slot), item)) {
                 player.getInventory().setSelectedSlot(slot);
@@ -97,6 +102,14 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
 
     @Override
     public boolean use(ThunderSequence.Item item) {
+        if (item == ThunderSequence.Item.HYPERION) {
+            int slot = HyperionAccess.find(player, hyperionKind());
+            if (slot < 0) return false;
+            if (player.getInventory().getSelectedSlot() != slot) {
+                player.getInventory().setSelectedSlot(slot);
+                return true; // Next scheduled use (four ticks later) uses the newly selected item.
+            }
+        }
         if (!matches(player.getMainHandItem(), item) || client.gameMode == null) return false;
         // Synchronize the selected slot before using the selected item.
         client.gameMode.useItem(player, InteractionHand.MAIN_HAND);
@@ -105,6 +118,15 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
 
     @Override
     public boolean hasLivingThunder() { return !encounter.isEmpty(); }
+
+    private HyperionPolicy.Kind hyperionKind() {
+        java.util.List<Double> health = new java.util.ArrayList<>();
+        for (UUID id : encounter) {
+            var entry = tracker.get(id);
+            health.add(entry == null ? null : entry.nametag().currentHp());
+        }
+        return HyperionPolicy.thunder(health);
+    }
 
     @Override
     public boolean hasThunderInAttackRange() {

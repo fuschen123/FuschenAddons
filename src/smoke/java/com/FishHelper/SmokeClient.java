@@ -73,7 +73,7 @@ public class SmokeClient implements ClientModInitializer {
 
         toggle(c); mod("fishingAction",3); mod("actionTimer",0); mod("sosFlarePending",true); tick(c,1);
         check(mod("hookRecovery")!=null && (boolean)mod("sosFlarePending"),"normal catch preserves queued flare through shared recast"); toggle(c);
-        toggle(c); mod("fishingAction",5); mod("actionTimer",10_000); tick(c,102);
+        toggle(c); mod("fishingAction",5); mod("actionTimer",10_000); tick(c,Config.INSTANCE.petCommandDelayTicks + 622);
         check((boolean)mod("enabled") && mod("hookRecovery")!=null,"stuck pet/action phase times out into recovery"); toggle(c);
         toggle(c); mod("hoppityAwaitingYes",true); mod("hoppityPauseTicks",200); tick(c,200);
         check((boolean)mod("enabled") && !(boolean)mod("hoppityAwaitingYes") && mod("hookRecovery")==null,"Hoppity wait bounded and resumes");
@@ -92,6 +92,7 @@ public class SmokeClient implements ClientModInitializer {
         c.level.removeEntity(label.getId(),net.minecraft.world.entity.Entity.RemovalReason.DISCARDED); c.level.removeEntity(guardian.getId(),net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
         check(net.minecraft.network.chat.Component.translatable("key.tsclient.toggle").getString().equals("Start/Stop FishHelper"),"renamed keybind");
         JawbusSmokeChecks.run(this, c);
+        SequenceSmokeChecks.run(this, c);
     }
     int ticks, step;
     ConfigScreen screen;
@@ -111,6 +112,8 @@ public class SmokeClient implements ClientModInitializer {
     void screenshot(String name) { Minecraft c=Minecraft.getInstance(); Screenshot.grab(new File("../build/smoke-captures"),name,c.getMainRenderTarget(),1,m->System.out.println("SMOKE_SCREENSHOT: "+m.getString())); }
     public void onInitializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(client->{ try {
+            client.options.pauseOnLostFocus = false;
+            if (client.screen instanceof net.minecraft.client.gui.screens.PauseScreen) client.setScreen(null);
             if(++ticks>5000) throw new AssertionError("Smoke timeout");
             if(client.getOverlay()!=null || ticks<100 || ticks%40!=0) return;
             switch(step++) {
@@ -131,13 +134,12 @@ public class SmokeClient implements ClientModInitializer {
                     check(Config.INSTANCE.flareTier==Config.FlareTier.WARNING,"keyboard selection");
                     click("Warning Flare"); screen.keyPressed(key(256)); check(field(screen,"dropdown")==null,"Escape closes popup");
                     click("Soul Whip"); screen.mouseClicked(mouse(1,1),false); check(field(screen,"dropdown")==null && client.screen==screen,"outside closes only popup");
-                    client.options.guiScale().set(2); client.resizeGui(); value(screen,"scroll",2); rebuild(); click("Pet 1");
+                    client.options.guiScale().set(2); client.resizeGui(); value(screen,"scroll",4); rebuild(); click("Choose pet");
                 }
                 case 2 -> {
-                    screenshot("dropdown-pet-compact.png"); int scroll=(int)field(screen,"scroll");
-                    screen.mouseScrolled(400,160,0,-6); check((int)field(screen,"scroll")==scroll,"popup wheel changed page");
-                    screen.keyPressed(key(269)); screen.keyPressed(key(257)); check(Config.INSTANCE.petNumber==7,"pet seven");
-                    Config.load(); check(Config.INSTANCE.actionWeapon==Config.ActionWeapon.SOUL_WHIP && Config.INSTANCE.flareTier==Config.FlareTier.WARNING && Config.INSTANCE.petNumber==7,"dropdown persistence");
+                    screenshot("dropdown-pet-compact.png");
+                    check(client.screen instanceof PetSelectionScreen,"Cascade pet catalog opened");
+                    Config.load(); check(Config.INSTANCE.actionWeapon==Config.ActionWeapon.SOUL_WHIP && Config.INSTANCE.flareTier==Config.FlareTier.WARNING,"dropdown persistence");
                     command("fuschen"); check(client.screen instanceof ConfigScreen,"/fuschen");
                     command("fa gui"); check(client.screen instanceof HudEditorScreen,"/fa gui"); editor=(HudEditorScreen)client.screen;
                     Config.INSTANCE.healthbarX=.5; Config.INSTANCE.healthbarY=.12;
@@ -176,6 +178,29 @@ public class SmokeClient implements ClientModInitializer {
                 case 9 -> {
                     if(client.level==null || client.player==null || client.screen!=null) {step--; return;}
                     runtimeChecks(client);
+                    Config.INSTANCE.petPages.put(1,java.util.List.of(
+                            new PetIdentity("uuid:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","Flying Fish","LEGENDARY",100,"Washed-up Souvenir"),
+                            new PetIdentity("uuid:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","Flying Fish","LEGENDARY",100,"Washed-up Souvenir"),
+                            new PetIdentity("uuid:cccccccccccccccccccccccccccccccc","Dolphin","EPIC",89,"Unknown")));
+                    Config.INSTANCE.petPageCount=2;
+                    client.setScreen(new PetSelectionScreen(null));
+                }
+                case 10 -> {
+                    screenshot("pet-catalog.png");
+                    var chooser=(PetSelectionScreen)client.screen;
+                    var first=chooser.children().stream().filter(e->e instanceof Button b && b.getMessage().getString().contains("#aaaaaa")).map(e->(Button)e).findFirst().orElseThrow();
+                    chooser.mouseClicked(mouse(first.getX()+5,first.getY()+5),false);chooser.mouseReleased(mouse(first.getX()+5,first.getY()+5));
+                    check(Config.INSTANCE.selectedPet.id().equals("uuid:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),"Cascade pet selection distinguishes duplicate names");
+                    Config.load();check(Config.INSTANCE.selectedPet.id().equals("uuid:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),"pet identity persists");
+                    Config.INSTANCE.twoHyperions=true;command("fa");screen=(ConfigScreen)client.screen;value(screen,"scroll",7);rebuild();
+                }
+                case 11 -> {
+                    screenshot("hyperion-slots.png");
+                    var slider=screen.children().stream().filter(e->e instanceof net.minecraft.client.gui.components.AbstractSliderButton).findFirst().orElseThrow();
+                    int original=Config.INSTANCE.ultimateWiseSlot;
+                    slider.keyPressed(key(262));check(Config.INSTANCE.ultimateWiseSlot==Math.min(9,original+1),"slot slider steps in integers");
+                    Config.load();check(Config.INSTANCE.ultimateWiseSlot==Math.min(9,original+1),"slot slider persists");
+                    Config.INSTANCE.petPages.clear();Config.INSTANCE.selectedPet=null;Config.INSTANCE.twoHyperions=false;Config.save();
                     java.nio.file.Files.writeString(java.nio.file.Path.of("../build/smoke-result.txt"), "PASS");
                     System.out.println("SMOKE_RUNTIME_OK: real client rod slots/offhand, stale hook reconciliation, watchdog, legitimate waits, temporary actions, manual off and world disable");
                     client.stop();

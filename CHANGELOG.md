@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.56
+
+- Add an optional, delayed pet swap with one-second retries, live UUID-based pet resolution and a Cascade catalog of observed menu pages. Active/ambiguous pets are never blindly clicked.
+- Revalidate the owned hook/mob immediately before the fifth-tick one-shot Hyperion recovery.
+- Add an independent idle auto-rod option; coordinate slot ownership across catch, pets, flare, Thunder and recovery.
+- Check flares every ten seconds, recognize tiers/real skull entities, exclude Plasmaflux and delay each select/use/restore transition (default three ticks).
+- Preserve completely manual Thunder camera control and add validated 1/2-Hyperion modes: Chimera for catches/recovery, Ultimate Wise above 3M Thunder HP, Chimera at/below 3M or unknown HP.
+- Support keyboard and mouse/side-button bindings for fishing, config and movement, preserving legacy keyboard settings.
+- Add /fa movement center and /fuschen movement center; keep movement near the chosen point with collision/edge checks and no camera changes.
+- Preserve Jawbus/manual/world/menu priorities and bounded automatic recovery. Add unit and local-client integration coverage.
+
 ## 0.0.55
 
 ### Fixed

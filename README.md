@@ -1,4 +1,4 @@
-# FuschenAddons 0.0.45
+# FuschenAddons 0.0.56
 
 Client-side fishing helper by fuschen. Built for **Minecraft 26.1.2, Java 25,
 Fabric Loader >= 0.19.5 and Fabric API**. Cascade `2026.09.7+26.1` is bundled.
@@ -8,8 +8,7 @@ this project retains its existing Minecraft 26.1.2 target.
 
 ## Configuration and HUD
 
-Open configuration with **P**, `/fa` or `/fuschen`. Action Weapon, Flare and
-Fishing Pet now use dropdowns. Click a row to select; Escape or an outside click
+Open configuration with **P**, `/fa` or `/fuschen`. Action Weapon and Flare use dropdowns; Fishing Pet opens the Cascade catalog. Click a row to select; Escape or an outside click
 closes the popup. Arrow keys, Home/End and Enter also work. The popup scrolls
 independently of the page and opens above/below its control to fit the screen.
 Values save automatically in `config/fuschenaddons.json`; old settings are retained.
@@ -29,6 +28,58 @@ its identity expires. A two-second entity gap retains the selection and displays
 unknown health. This prevents rapid switching between several nearby creatures.
 HP comes only from actual nametag values. Missing maximum HP is labelled unknown
 and does not produce a made-up percentage or a vanilla-health fallback.
+
+## Pets, flares, hotbar and movement
+
+**Auto pet swap** can disable every automatic `/pets` command and pet click.
+**Delay before /pets** is in client ticks, default **5** (250 ms at 20 TPS), range
+0–200. The existing hook must be live before the menu opens. In a verified Pets
+menu, the current selected pet is resolved before every attempt; unconfirmed summon
+clicks retry every **20 ticks**. An active/despawn tooltip stops clicks immediately.
+The command is sent only once per transaction. A foreign menu aborts the transaction.
+Menu arrival has a five-second limit; the whole transaction has a 30-second limit
+plus the configured delay, after which fishing continues without disabling the helper.
+
+Open actual `/pets` pages to populate **Fishing pet -> Choose pet**. Only observed
+name, rarity, level and held-item information is displayed, with `Unknown` for data
+not supplied by the server. Pet UUIDs are preferred over slot numbers and survive
+reordering/level changes. If no UUID is supplied, all menu pages must have been read
+and the complete descriptive match must be unique. Indistinguishable pets are not
+clicked. Only verified Next/Previous Page buttons in the current Pets menu are used
+to reach a previously observed pet page. Unread pages are never invented. The old
+numeric pet-position setting is retained for migration purposes but does not authorize
+an automatic click: select a pet once in the new catalog. Clear and reread the catalog
+after changing SkyBlock profiles; the client cannot reliably infer profile identity.
+
+**Auto-Swap zur Angel außerhalb der Fishing-Sequenz** (default ON) controls idle
+rod selection. OFF respects the manual slot outside an active catch/recovery; required
+returns within an action still work. Menus and exclusive actions own their input.
+
+Flares are checked every **200 enabled client ticks** (10 seconds at 20 TPS). The
+required order is Warning < Alert < SOS; an equal or higher tier within 40 blocks
+prevents deployment. Plasmaflux does not count. Real flare skull textures are recognized
+without needing a nametag. Missing items cause no clicks/messages. **None** disables
+checks. Placement waits behind protected actions and rechecks nearby flares and the
+selected item before use. **Flare swap delay** defaults to **3 ticks** (150 ms), range
+1–20, between select/use/restore. The original selected slot is restored without
+forcing a recast. This verifies visible flare entities/range, not server-side assignment
+of the buff to one of the eligible players; changed server textures require an update.
+Texture identifiers were verified against
+[SkyHanni's flare catalog](https://github.com/hannibal002/SkyHanni-REPO/blob/main/constants/Skulls.json).
+The range is documented in the [Hypixel Wiki](https://wiki.hypixel.net/SOS_Flare).
+
+All three mod bindings (fishing, config, movement) accept keyboard keys or mouse
+buttons through normal Minecraft input. Use **General** or vanilla Controls. The
+capture-starting click is ignored; Escape cancels. Type-aware vanilla key names are
+saved; old keyboard codes remain readable.
+
+Set **`/fa movement center`** or **`/fuschen movement center`** before enabling
+Random Movement with its keybind. It steers normal forward/back/strafe inputs around
+a horizontal radius of roughly two blocks, recalculating from the current position
+and user-controlled yaw. It checks collision/support ahead, stops at unsafe edges,
+and yields to menus/Jawbus/exclusive actions. No teleport or automatic rotation is
+used. Missing center produces one hint, not uncontrolled movement. World/server
+changes discard the center and stop the feature. Disabling releases owned inputs.
 
 ## Shared sea-creature recognition
 
@@ -53,21 +104,28 @@ message interrupts fishing/pet/flare/recovery actions and waits up to three seco
 for a recognized Thunder. Recognized Thunder within 32 blocks join the encounter;
 once joined, a loaded living Thunder remains relevant even if it moves farther away.
 
-1. Aim at the actual Thunder nearest the cast position and use Ice Spray Wand once,
-   if present in the hotbar.
-2. Aim again and use Ink Wand once, if available. Missing wands are skipped independently.
-3. Select Hyperion and look down. Right-click once every four client ticks
-   (5 CPS at 20 TPS) while at least one encounter Thunder is within five blocks in 3D.
-   Outside this attack radius clicks pause; they resume on reentry.
-4. Finish only when all encounter Thunder are dead or have expired from detection.
-   Restore the original view and slot and resume fishing. A short recognition gap
-   or the death of only one of several Thunder cannot finish the encounter.
+1. Use Ice Spray Wand once in the direction the player currently looks, if available.
+2. Use Ink Wand once in the current direction, if available.
+3. Use Hyperion in the current direction every four client ticks (5 CPS at 20 TPS)
+   while a relevant Thunder is within five blocks. Outside this range attacks wait.
+4. Finish after all tracked Thunder are dead or absent beyond the recognition grace.
+   Restore the slot and resume fishing. No camera rotation or view restoration occurs,
+   including on cancellation.
+
+With **2 Hyperions**, configure different hotbar slots 1–9 for Ultimate Wise and
+Chimera. Both items and their actual enchantments must validate before use; changing
+the inventory cannot cause unrelated items to be clicked. Normal catch/hook recovery
+uses Chimera. Thunder uses Ultimate Wise above **3,000,000 HP**, and Chimera at or
+below that threshold. Unknown HP or any tracked Thunder at/below the threshold also
+selects Chimera. A switch gets a separate tick before use. The threshold does not
+predict damage: an Ultimate Wise hit from above 3M can still kill if it deals enough
+damage. In **1 Hyperion** mode the existing hotbar search is retained.
 
 The fishing toggle cancels immediately. Opening a menu, death, disabling this
 option or missing Hyperion ends this action while keeping fishing enabled. Fishing
 continues automatically once prerequisites are available. Only a server/world
 change automatically switches fishing off; activate it manually in the new world.
-Old-world camera/slot state is never applied to a new player or world. With the
+Old-world slot state is never applied to a new player or world. With the
 option off, other rare-creature messages briefly select the configured action weapon
 and then allow fishing to continue.
 
@@ -136,7 +194,7 @@ Only the actual `getHookedIn()` entity on a hook owned by your player can trigge
 recovery. Nearby creatures alone do not. The unified sequence replaces the old
 Water Snake and Magma Cube right-click sequences:
 
-1. Find the rod and a hotbar Hyperion, select Hyperion and click once.
+1. Detect the real hook/mob link, select Hyperion, then click once on the fifth client tick after detection. Recheck that exact living mob is still attached immediately before use.
 2. Re-resolve the original rod, including a moved hotbar slot or offhand rod.
 3. Reel once if the original hook still exists; wait for it to disappear before
    casting once. If switching weapons already removed it, only cast. Leave a new,
@@ -163,7 +221,7 @@ hook is left alone. This repairs the state instead of requiring an off/on toggle
 
 ## Development and validation
 
-Run `./gradlew clean build` with Java 25. The 62-test unit suite covers Feesh's actual
+Run `./gradlew clean build` with Java 25. The unit suite covers Feesh's actual
 formatted nametag examples, partial/unknown health, identity deduplication and gaps,
 multiple Thunder, radius exit/reentry, 5-CPS timing, missing items, single-shot hook
 recovery, delayed release, retry limits, watchdog exemptions/preemption, the exact
@@ -191,8 +249,8 @@ multiple mobs, zero-HP death, Hoppity/menu waits, a fresh watchdog window, and
 manual/world OFF.
 Still verify on the server:
 
-- Live Thunder nametag/entity pairing, aiming, multiple nearby Thunder, packet gaps,
-  radius exit/reentry, wand cooldowns and normal camera/slot restoration.
+- Live Thunder nametag/entity pairing, user-controlled aiming, multiple nearby Thunder, packet gaps,
+  radius exit/reentry, wand cooldowns, the 3M switch and slot-only restoration.
 - Main/offhand rods, Water Snake/Magma Cube hook linkage, disappearing/stubborn hooks,
   missing items and Thunder interrupting recovery.
 - Cancellation on menus, death, option disable, toggle and world changes; existing

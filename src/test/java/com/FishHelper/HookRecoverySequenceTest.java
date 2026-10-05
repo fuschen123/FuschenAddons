@@ -4,7 +4,8 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 class HookRecoverySequenceTest {
     static class Controls extends RecastSequenceTest.Controls implements HookRecoverySequence.Controls {
-        boolean hyperion=true; int weaponClicks; boolean selected;
+        boolean hyperion=true, hooked=true; int weaponClicks; boolean selected;
+        public boolean stillHooked() { return hooked; }
         public boolean rodAvailable() {return rod;}
         public boolean selectHyperion() {selected=hyperion; return hyperion;}
         public boolean useHyperion() {assertTrue(selected); if(!hyperion)return false; weaponClicks++; return true;}
@@ -53,5 +54,10 @@ class HookRecoverySequenceTest {
             s.tick(c);
             assertEquals(1, c.weaponClicks, "Hyperion should fire at tick " + (delay + 1));
         }
+    }
+    @Test void detachedMobBeforeUseSkipsHyperionButStillRecoversRod() {
+        var c = new Controls(); var s = new HookRecoverySequence(true, c.original, 4);
+        s.tick(c); c.hooked = false; ticks(s,c,20);
+        assertEquals(0,c.weaponClicks); assertEquals(1,c.reels);
     }
 }
