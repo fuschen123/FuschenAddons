@@ -1,4 +1,4 @@
-# FuschenAddons 0.0.58
+# FuschenAddons 0.0.59
 
 Client-side fishing helper by fuschen. Built for **Minecraft 26.1.2, Java 25,
 Fabric Loader >= 0.19.5 and Fabric API**. Cascade `2026.09.7+26.1` is bundled.
@@ -115,7 +115,8 @@ once joined, a loaded living Thunder remains relevant even if it moves farther a
 1. Use Ice Spray Wand once in the direction the player currently looks, if available.
 2. Use Ink Wand once in the current direction, if available.
 3. Use Hyperion in the current direction every four client ticks (5 CPS at 20 TPS)
-   while a relevant Thunder is within five blocks. Outside this range attacks wait.
+   while a relevant Thunder is within six blocks (inclusive, squared 3D distance <= 36).
+   Outside this range attacks wait and the living encounter remains active.
 4. Finish after all tracked Thunder are dead or absent beyond the recognition grace.
    Restore the slot and resume fishing. No camera rotation or view restoration occurs,
    including on cancellation.
@@ -166,6 +167,31 @@ Fishing action state and the watchdog are reset before normal processing resumes
 other menu/Hoppity waits still apply. There is at most one start and one end message
 per pause. Manual OFF or server/world change clears the encounter and takes priority;
 ending a Jawbus pause never enables FishHelper. No new toggle is required.
+
+## Jawbus Shuriken warning
+
+A relevant living Jawbus whose complete nametag has been read without a Shuriken
+effect on two consecutive scans shows **No Shuriken!** in the center of the HUD.
+The known marker is **✯ after the health heart and optional closing boss bracket**.
+This convention is evidenced by
+[RFU's nametag parser](https://github.com/Ricciow/RiccioFishingUtils-Modern/blob/a880e66cc393d16057bdd6bcbda3e13e19028ae4/src/main/kotlin/cloud/glitchdev/rfu/data/mob/SkyblockEntity.kt#L160)
+and the existing
+[Feesh Jawbus nametag fixture](https://github.com/Sleepy-Panda/Feesh/blob/130d48915cad7f720cec6b57d2499253bdf1dcf8/src/main/kotlin/com/github/sleepypanda/feesh/utils/EntityUtils.kt).
+Only this protocol fact is used from RFU; no RFU runtime or implementation is included.
+
+The shared tracker associates the actual display stand with the real creature UUID;
+nearby labels are not assigned to the nearest arbitrary mob. Partial/unknown HP,
+unrecognized suffixes or unread tags do not confirm a missing Shuriken. A marked
+tag hides that creature's warning at the next scan (every five client ticks).
+Missing status needs two complete scans within ten ticks. Existing status survives
+short tag gaps for up to 40 client ticks, then becomes unknown. Multiple Jawbus keep
+the warning visible while any one has confirmed missing status. Entity death,
+zero-HP tags, despawn and world/server changes clear the corresponding warning.
+
+Relevance follows the same 32-block player/bobber/origin acquisition and living UUID
+tracking as the Jawbus pause. The HUD notice also works with FishHelper off and
+respects Hide GUI. It draws persistent text, never restarts a title animation, never
+uses Shuriken, and never changes the fishing pause, input state or failsafe.
 
 ## Thunder Muter
 

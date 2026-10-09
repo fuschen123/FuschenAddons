@@ -97,6 +97,7 @@ public class FishHelperClient implements ClientModInitializer {
     public void onInitializeClient() {
         Config.load();
         SeaCreatureHud.initialize();
+        JawbusShurikenWarningFeature.initialize();
         RandomMovementFeature.initialize();
 
         TOGGLE_KEY = KeyMappingHelper.registerKeyMapping(
@@ -231,6 +232,7 @@ public class FishHelperClient implements ClientModInitializer {
                 openConfigMenu();
             }
 
+            JawbusShurikenWarningFeature.INSTANCE.tick(client);
             if (!enabled) return;
             if (Config.INSTANCE.flareTier == Config.FlareTier.NONE) {
                 sosFlarePending = false; flareCheckTicks = 0;
@@ -1036,6 +1038,7 @@ public class FishHelperClient implements ClientModInitializer {
         HOOK_ENCOUNTERS.clear();
         OwnedHookResolver.reset();
         SeaCreatureTracker.INSTANCE.reset();
+        JawbusShurikenWarningFeature.INSTANCE.reset();
         ThunderMuter.reset();
         RandomMovementFeature.reset(Minecraft.getInstance());
         if (wasEnabled && player != null) player.sendSystemMessage(Component.literal(

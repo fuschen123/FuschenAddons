@@ -17,6 +17,7 @@ final class JawbusPauseFeature {
     private Vec3 fishingOrigin;
 
     boolean active() { return pause.active(); }
+    java.util.List<JawbusPause.Target> targets() { return pause.targets(); }
     void reset() { pause.reset(); world = null; fishingOrigin = null; }
 
     JawbusPause.Change spawned(Minecraft client) {
@@ -61,7 +62,7 @@ final class JawbusPauseFeature {
     private void bindWorld(Minecraft client) {
         if (world != client.level) { reset(); world = client.level; }
     }
-    private Entity resolve(Minecraft client, JawbusPause.Target target) {
+    Entity resolve(Minecraft client, JawbusPause.Target target) {
         Entity entity = client.level.getEntity(target.entityId());
         if (entity != null && entity.getUUID().equals(target.uuid())) return entity;
         for (Entity candidate : client.level.entitiesForRendering())

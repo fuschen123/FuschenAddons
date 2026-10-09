@@ -116,7 +116,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                 }
                 info("01  Ice Spray", "Use in your current view direction; your camera stays under your control.")
                 info("02  Ink Wand", "Use Ink Wand in your current view direction if available.")
-                info("03  Hyperion", "Current view, 5 CPS within 5 blocks. Two Hyperions: switch to Chimera at 3M HP; unknown HP also uses Chimera.")
+                info("03  Hyperion", "Current view, 5 CPS within 6 blocks. Two Hyperions: switch to Chimera at 3M HP; unknown HP also uses Chimera.")
                 info("Return to fishing", "Restore the slot only. No camera changes on completion or cancellation.")
             }
             Tab.GENERAL -> {

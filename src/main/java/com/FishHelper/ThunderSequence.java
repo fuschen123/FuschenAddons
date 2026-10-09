@@ -19,9 +19,9 @@ public final class ThunderSequence {
     private int searchTicks;
     private boolean aborted;
 
-    /** Five blocks in 3D, inclusive, rather than a ten-block-wide cube. */
+    /** Six blocks in 3D, inclusive. */
     public static boolean inAttackRange(double distanceSquared) {
-        return distanceSquared <= 25.0;
+        return distanceSquared >= 0 && distanceSquared <= 36.0;
     }
 
     public boolean active() {
@@ -61,7 +61,7 @@ public final class ThunderSequence {
                 waitTicks = 2;
             }
             case HYPERION_USE -> {
-                // Leaving five blocks pauses attacks, not the encounter. Identity memory handles gaps.
+                // Leaving six blocks pauses attacks, not the encounter. Identity memory handles gaps.
                 if (!controls.hasThunderInAttackRange()) return;
                 if (!controls.use(Item.HYPERION)) cancel();
                 waitTicks = 4; // 5 right clicks per second at 20 TPS.

@@ -149,6 +149,15 @@ final class SequenceSmokeChecks {
             label.setCustomName(Component.literal("[Lv400] Thunder 3M/35M❤"));for(int i=0;i<6;i++)SeaCreatureTracker.INSTANCE.tick(c);
             int count=input.uses.size();for(int i=0;i<12;i++)response.tick();
             t.check(input.uses.subList(count,input.uses.size()).stream().anyMatch(s->s.contains(":1:Hyperion")),"3M Thunder switches to Chimera");
+            for (double distance : new double[]{5.99, 6.0, 6.01}) {
+                thunder.setPos(c.player.position().add(distance,0,0)); count=input.uses.size();
+                for(int i=0;i<12;i++)response.tick();
+                t.check((input.uses.size()>count)==(distance<=6.0),"Thunder 3D Hyperion boundary at " + distance);
+                t.check(response.hasLivingThunder(),"crossing six blocks preserves encounter");
+            }
+            thunder.setPos(c.player.position().add(6,0,0));count=input.uses.size();
+            for(int i=0;i<12;i++)response.tick();
+            t.check(input.uses.size()>count,"returning to six blocks resumes existing Thunder sequence");
             thunder.setPos(c.player.position().add(20,0,0));count=input.uses.size();for(int i=0;i<30;i++)response.tick();
             t.check(response.hasLivingThunder() && input.uses.size()==count,"out of range is alive and no attack");
             float yaw=c.player.getYRot(),pitch=c.player.getXRot();response.finish();

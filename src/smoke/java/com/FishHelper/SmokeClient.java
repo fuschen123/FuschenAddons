@@ -92,6 +92,7 @@ public class SmokeClient implements ClientModInitializer {
         c.level.removeEntity(label.getId(),net.minecraft.world.entity.Entity.RemovalReason.DISCARDED); c.level.removeEntity(guardian.getId(),net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
         check(net.minecraft.network.chat.Component.translatable("key.tsclient.toggle").getString().equals("Start/Stop FishHelper"),"renamed keybind");
         JawbusSmokeChecks.run(this, c);
+        ShurikenSmokeChecks.run(this, c);
         SequenceSmokeChecks.run(this, c);
     }
     int ticks, step;
@@ -197,6 +198,11 @@ public class SmokeClient implements ClientModInitializer {
                     slider.keyPressed(key(262));check(Config.INSTANCE.ultimateWiseSlot==Math.min(9,original+1),"slot slider steps in integers");
                     Config.load();check(Config.INSTANCE.ultimateWiseSlot==Math.min(9,original+1),"slot slider persists");
                     Config.INSTANCE.petPages.clear();Config.INSTANCE.petMenuPages.clear();Config.INSTANCE.selectedPet=null;Config.INSTANCE.twoHyperions=false;Config.save();
+                    ShurikenSmokeChecks.preparePreview(this, client);
+                }
+                case 13 -> {
+                    screenshot("jawbus-shuriken-warning.png");
+                    ShurikenSmokeChecks.finishPreview(client);
                     java.nio.file.Files.writeString(java.nio.file.Path.of("../build/smoke-result.txt"), "PASS");
                     System.out.println("SMOKE_RUNTIME_OK: real client rod slots/offhand, stale hook reconciliation, watchdog, legitimate waits, temporary actions, manual off and world disable");
                     client.stop();
