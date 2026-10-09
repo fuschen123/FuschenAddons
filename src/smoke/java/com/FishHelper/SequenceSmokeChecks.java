@@ -81,10 +81,12 @@ final class SequenceSmokeChecks {
 
             inv.setItem(0,hyperion("ultimate_wise"));inv.setItem(1,hyperion("ultimate_chimera"));
             Config.INSTANCE.twoHyperions=true;Config.INSTANCE.ultimateWiseSlot=1;Config.INSTANCE.chimeraSlot=2;
+            Config.INSTANCE.autoDetectHyperions=false;
             t.check(HyperionAccess.validPair(c.player),"actual custom-data enchants validate both Hyperions");
             Config.INSTANCE.chimeraSlot=1;t.check(!HyperionAccess.validPair(c.player),"same slot refused");Config.INSTANCE.chimeraSlot=2;
             var chimera=inv.getItem(1);inv.setItem(1,named("Unrelated sword"));
             t.check(HyperionAccess.find(c.player,HyperionPolicy.Kind.ULTIMATE_WISE)<0,"changed hotbar invalidates the pair");inv.setItem(1,chimera);
+            HyperionDetectionSmokeChecks.run(t,c);
 
             var mob=new MagmaCube(EntityType.MAGMA_CUBE,c.level);mob.setId(2_200_010);mob.setPos(c.player.position());c.level.addEntity(mob);hook.attached=mob;
             input.uses.clear();input.now=0;t.toggle(c); // recognition creates the sequence; no use on this tick
@@ -99,13 +101,13 @@ final class SequenceSmokeChecks {
             String a="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",b="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
             Config.INSTANCE.selectedPet=PetMenus.read(pet(a,false));
             t.toggle(c);t.mod("fishingAction",6);t.mod("actionTimer",0);
-            var menu=pets(c,"Pets (1/2)");menu.slots.get(10).set(pet(a,false));menu.slots.get(11).set(pet(b,false));
-            input.clicks.clear();ticks(t,c,input,1);t.check(input.clicks.equals(List.of(10)),"first pet click resolves UUID");
+            var menu=pets(c,"Pets (1/2)");menu.slots.get(10).set(PetGridSmokeChecks.favorite(pet(a,false),"⭐"));menu.slots.get(11).set(pet(b,false));
+            input.clicks.clear();ticks(t,c,input,1);t.check(input.clicks.equals(List.of(10)),"first pet click resolves a favorited pet by UUID");
             menu.slots.get(10).set(ItemStack.EMPTY);menu.slots.get(20).set(pet(a,false));
             ticks(t,c,input,19);t.check(input.clicks.size()==1,"no retry before twenty ticks");ticks(t,c,input,1);
             t.check(input.clicks.equals(List.of(10,20)),"retry resolves moved pet rather than stale slot");
-            menu.slots.get(20).set(pet(a,true));ticks(t,c,input,1);
-            t.check(input.clicks.size()==2 && c.screen==null && (int)t.mod("fishingAction")==-1,"active tooltip confirms swap without despawn");
+            menu.slots.get(20).set(PetGridSmokeChecks.favorite(pet(a,true),"★"));ticks(t,c,input,1);
+            t.check(input.clicks.size()==2 && c.screen==null && (int)t.mod("fishingAction")==-1,"active favorite confirms swap without despawn");
             t.check(Config.INSTANCE.petPages.size()==1 && Config.INSTANCE.petPageCount==2,"only observed pages cached");
             t.mod("fishingAction",6);menu=pets(c,"Bank");menu.slots.get(10).set(pet(a,false));ticks(t,c,input,50);
             t.check(input.clicks.size()==2 && c.screen!=null,"foreign menu never clicked or closed");c.player.closeContainer();
@@ -147,6 +149,15 @@ final class SequenceSmokeChecks {
             label.setCustomName(Component.literal("[Lv400] Thunder 3M/35M❤"));for(int i=0;i<6;i++)SeaCreatureTracker.INSTANCE.tick(c);
             int count=input.uses.size();for(int i=0;i<12;i++)response.tick();
             t.check(input.uses.subList(count,input.uses.size()).stream().anyMatch(s->s.contains(":1:Hyperion")),"3M Thunder switches to Chimera");
+            for (double distance : new double[]{5.99, 6.0, 6.01}) {
+                thunder.setPos(c.player.position().add(distance,0,0)); count=input.uses.size();
+                for(int i=0;i<12;i++)response.tick();
+                t.check((input.uses.size()>count)==(distance<=6.0),"Thunder 3D Hyperion boundary at " + distance);
+                t.check(response.hasLivingThunder(),"crossing six blocks preserves encounter");
+            }
+            thunder.setPos(c.player.position().add(6,0,0));count=input.uses.size();
+            for(int i=0;i<12;i++)response.tick();
+            t.check(input.uses.size()>count,"returning to six blocks resumes existing Thunder sequence");
             thunder.setPos(c.player.position().add(20,0,0));count=input.uses.size();for(int i=0;i<30;i++)response.tick();
             t.check(response.hasLivingThunder() && input.uses.size()==count,"out of range is alive and no attack");
             float yaw=c.player.getYRot(),pitch=c.player.getXRot();response.finish();

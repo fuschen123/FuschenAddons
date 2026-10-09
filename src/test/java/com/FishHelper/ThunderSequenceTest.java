@@ -109,9 +109,13 @@ class ThunderSequenceTest {
     @Test void guardiansOutsideRadiusPreventHyperion() {
         var s = new ThunderSequence(); var c = new Controls(); c.nearby = false;
         ticks(s, c, 30); assertEquals(List.of(ICE_SPRAY, INK_WAND), c.used);
-        assertTrue(ThunderSequence.inAttackRange(25.0));
-        assertFalse(ThunderSequence.inAttackRange(25.01));
-        assertFalse(ThunderSequence.inAttackRange(4 * 4 + 4 * 4));
+        assertTrue(ThunderSequence.inAttackRange(5.99 * 5.99));
+        assertTrue(ThunderSequence.inAttackRange(36.0));
+        assertFalse(ThunderSequence.inAttackRange(6.01 * 6.01));
+        assertTrue(ThunderSequence.inAttackRange(4 * 4 + 4 * 4));
+        assertFalse(ThunderSequence.inAttackRange(4 * 4 + 4 * 4 + 4 * 4));
+        assertFalse(ThunderSequence.inAttackRange(Double.NaN));
+        assertFalse(ThunderSequence.inAttackRange(-1));
     }
 
     @Test void movingAnItemAfterSelectingItDoesNotUseAnotherStack() {

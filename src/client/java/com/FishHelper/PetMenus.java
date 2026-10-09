@@ -16,7 +16,8 @@ import java.util.regex.Pattern;
 /** Reads only actual server-menu stacks. Never scans or fabricates unopened pages. */
 public final class PetMenus {
     public record Entry(int slot, PetIdentity pet, boolean active, boolean summon) { }
-    private static final Pattern LEVEL = Pattern.compile("^\\[Lvl?\\s*(\\d+)]\\s*(.+)$", Pattern.CASE_INSENSITIVE);
+    // A favorite marker decorates the name; it must not change the pet's identity.
+    private static final Pattern LEVEL = Pattern.compile("^(?:[⭐★]\\x{FE0F}?\\h*)?\\[Lvl?\\s*(\\d+)]\\s*(.+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern PAGE = Pattern.compile("\\((\\d+)\\s*/\\s*(\\d+)\\)");
     private static String previous = "";
     private static int stableTicks;
@@ -86,26 +87,37 @@ public final class PetMenus {
     static void observe(Minecraft client) {
         var screen = screen(client);
         if (screen == null) { previous = ""; stableTicks = 0; return; }
-        List<PetIdentity> pets = entries(client).stream().map(Entry::pet).toList();
+        List<Entry> entries = entries(client);
+        List<PetIdentity> pets = entries.stream().map(Entry::pet).toList();
         if (pets.isEmpty()) return; // Do not replace a cached page with an in-flight empty packet.
         var page = PAGE.matcher(plain(screen.getTitle().getString()));
         int number = 1, count = 1;
         if (page.find()) { number = Integer.parseInt(page.group(1)); count = Integer.parseInt(page.group(2)); }
-        String snapshot = screen.getMenu().containerId + ":" + number + ":" + pets;
+        List<PetMenuSlot> slots = entries.stream().map(entry -> PetMenuSlot.capture(entry.slot(), entry.pet(),
+                screen.getMenu().slots.get(entry.slot()).getItem())).toList();
+        String snapshot = screen.getMenu().containerId + ":" + number + ":" + slots;
         if (!snapshot.equals(previous)) { previous = snapshot; stableTicks = 0; }
         if (++stableTicks < 3) return;
-        if (!pets.equals(Config.INSTANCE.petPages.get(number)) || Config.INSTANCE.petPageCount != count) {
+        if (!pets.equals(Config.INSTANCE.petPages.get(number)) || !slots.equals(Config.INSTANCE.petMenuPages.get(number))
+                || Config.INSTANCE.petPageCount != count) {
             Config.INSTANCE.petPages.put(number, pets);
+            Config.INSTANCE.petMenuPages.put(number, slots);
             Config.INSTANCE.petPageCount = count;
             final int pages = count;
             Config.INSTANCE.petPages.keySet().removeIf(n -> n > pages);
+            Config.INSTANCE.petMenuPages.keySet().removeIf(n -> n > pages);
             Config.save();
         }
     }
     public static List<PetIdentity> catalog() {
         Map<String, PetIdentity> pets = new LinkedHashMap<>();
-        Config.INSTANCE.petPages.values().forEach(page -> page.forEach(p -> pets.put(p.stable() ? p.id() : p.fallback(), p)));
+        new TreeMap<>(Config.INSTANCE.petPages).values().forEach(page -> page.forEach(p -> pets.put(p.stable() ? p.id() : p.fallback(), p)));
         return List.copyOf(pets.values());
+    }
+    public static List<PetMenuSlot> page(int number) {
+        return Config.INSTANCE.petMenuPages.getOrDefault(number, List.of()).stream()
+                .filter(entry -> entry != null && entry.pet() != null && PetMenuSlot.validSlot(entry.slot()))
+                .sorted(Comparator.comparingInt(PetMenuSlot::slot)).toList();
     }
     public static boolean selectable(PetIdentity wanted) {
         if (wanted.stable()) return true;

@@ -21,12 +21,15 @@ final class SeaCreatureTracker {
     private long ticks;
     private UUID hudTarget;
     private final Set<UUID> confirmedDeaths = new HashSet<>();
+    private final Map<UUID, JawbusShurikenWarning.Status> shurikenObservations = new HashMap<>();
 
-    void reset() { memory.clear(); confirmedDeaths.clear(); hudTarget = null; ticks = 0; world = null; }
+    void reset() { memory.clear(); confirmedDeaths.clear(); shurikenObservations.clear(); hudTarget = null; ticks = 0; world = null; }
     boolean confirmedDead(UUID uuid) { return confirmedDeaths.contains(uuid); }
+    Map<UUID, JawbusShurikenWarning.Status> shurikenObservations() { return Map.copyOf(shurikenObservations); }
 
     void tick(Minecraft client) {
         confirmedDeaths.clear();
+        shurikenObservations.clear();
         if (world != client.level) { memory.clear(); hudTarget = null; ticks = 0; world = client.level; }
         if (world == null) return;
         ticks++;
@@ -52,6 +55,11 @@ final class SeaCreatureTracker {
             if (tag.name().equals("Thunder") && !(mob instanceof ElderGuardian)) continue;
             if (!mob.isAlive() || mob.isRemoved()) continue;
             observations.add(new SeaCreatureMemory.Observation(mob.getUUID(), mob.getId(), tag));
+            if (tag.name().equals("Lord Jawbus")) {
+                var status = JawbusShurikenWarning.parse(text.toString());
+                shurikenObservations.merge(mob.getUUID(), status,
+                        (a, b) -> a == b ? a : JawbusShurikenWarning.Status.UNKNOWN);
+            }
         }
         memory.update(ticks, observations, presence);
         for (SeaCreatureMemory.Observation observation : observations)

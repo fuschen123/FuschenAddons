@@ -32,6 +32,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
     private var bindingId = "toggle"
     private var consumeMouseRelease = false
     private val rows = mutableListOf<Row>()
+    private val liveDetails = mutableMapOf<String, () -> String>()
     private var panelX = 0
     private var panelY = 0
     private var panelWidth = 0
@@ -56,6 +57,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
         clearWidgets()
         keyButton = null
         rows.clear()
+        liveDetails.clear()
         val config = Config.INSTANCE
         when (tab) {
             Tab.FISHING -> {
@@ -81,9 +83,16 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                     rebuild()
                 }
                 if (config.twoHyperions) {
-                    slotSlider("Ultimate-Wise-Hyperion", "Hotbar slot 1–9; must contain an Ultimate Wise Hyperion", { config.ultimateWiseSlot }) { config.ultimateWiseSlot = it }
-                    slotSlider("Chimera-Hyperion", "Different hotbar slot 1–9; must contain a Chimera Hyperion", { config.chimeraSlot }) { config.chimeraSlot = it }
-                    info("Slot validation", if (minecraft.player?.let { HyperionAccess.validPair(it) } == true) "Both Hyperion slots verified" else "Slots invalid or items not verified; no Hyperion use")
+                    toggle("Auto-detect Hyperions", "Identify both Hyperions by their enchantments in the hotbar", { config.autoDetectHyperions }) {
+                        config.autoDetectHyperions = it; rebuild()
+                    }
+                    if (!config.autoDetectHyperions) {
+                        slotSlider("Ultimate-Wise-Hyperion", "Hotbar slot 1–9; must contain an Ultimate Wise Hyperion", { config.ultimateWiseSlot }) { config.ultimateWiseSlot = it }
+                        slotSlider("Chimera-Hyperion", "Different hotbar slot 1–9; must contain a Chimera Hyperion", { config.chimeraSlot }) { config.chimeraSlot = it }
+                    }
+                    info("Hyperion detection", "")
+                    liveDetails["Hyperion detection"] = { hyperionStatus() }
+                    info("Item checks", "Enchantments checked again before use; both types required")
                 }
                 toggle("Slugfish timing", "Wait 10 seconds, adjusted for your ping", { config.slugfishReelEnabled }) {
                     config.slugfishReelEnabled = it
@@ -107,7 +116,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                 }
                 info("01  Ice Spray", "Use in your current view direction; your camera stays under your control.")
                 info("02  Ink Wand", "Use Ink Wand in your current view direction if available.")
-                info("03  Hyperion", "Current view, 5 CPS within 5 blocks. Two Hyperions: switch to Chimera at 3M HP; unknown HP also uses Chimera.")
+                info("03  Hyperion", "Current view, 5 CPS within 6 blocks. Two Hyperions: switch to Chimera at 3M HP; unknown HP also uses Chimera.")
                 info("Return to fishing", "Restore the slot only. No camera changes on completion or cancellation.")
             }
             Tab.GENERAL -> {
@@ -218,6 +227,15 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
 
     private fun info(title: String, detail: String) {
         rows += Row(title, detail) { _, _, _ -> }
+    }
+
+    private fun hyperionStatus(): String {
+        val player = minecraft.player ?: return "Join a world to detect Hyperions"
+        fun slot(kind: HyperionPolicy.Kind): String {
+            val slot = HyperionAccess.slot(player, kind)
+            return if (slot >= 0) "slot ${slot + 1}" else "not detected"
+        }
+        return "Ultimate Wise: ${slot(HyperionPolicy.Kind.ULTIMATE_WISE)} · Chimera: ${slot(HyperionPolicy.Kind.CHIMERA)}"
     }
 
     private fun number(title: String, detail: String, get: () -> String, decimal: Boolean, set: (Double) -> Unit) {
@@ -341,10 +359,11 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
             graphics.nextStratum()
             val textWidth = if (tab == Tab.THUNDER && scroll + index > 1) panelWidth - 44 else panelWidth - min(128, panelWidth / 3) - 56
             drawText(graphics, ellipsize(row.title, textWidth, 11), panelX + 22, y + 5, TEXT, 11)
-            val detail = ellipsize(row.detail, textWidth, 9)
+            val currentDetail = liveDetails[row.title]?.invoke() ?: row.detail
+            val detail = ellipsize(currentDetail, textWidth, 9)
             drawText(graphics, detail, panelX + 22, y + 23, MUTED, 9)
             if (dropdown == null && mouseX >= panelX + 12 && mouseX < panelX + panelWidth - 12 && mouseY >= y && mouseY < y + 39) {
-                graphics.setTooltipForNextFrame(Component.literal("${row.title}: ${row.detail}"), mouseX, mouseY)
+                graphics.setTooltipForNextFrame(Component.literal("${row.title}: $currentDetail"), mouseX, mouseY)
             }
         }
         val last = min(scroll + visibleRows, rows.size)
