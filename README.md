@@ -1,4 +1,4 @@
-# FuschenAddons 0.0.59
+# FuschenAddons 0.0.60
 
 Client-side fishing helper by fuschen. Built for **Minecraft 26.1.2, Java 25,
 Fabric Loader >= 0.19.5 and Fabric API**. Cascade `2026.09.7+26.1` is bundled.
@@ -105,56 +105,76 @@ without an observation. An absent entity gets a 40-tick grace period. A confirme
 entity death or reported zero HP removes it immediately. Changing worlds clears
 all recognition state. Server changes to the name/ID scheme need in-game verification.
 
-## Thunder response
+## Thunder response and cocoon releases
 
-Enable **Thunder -> Thunder response** (off by default). Your exact Thunder spawn
-message interrupts fishing/pet/flare/recovery actions and waits up to three seconds
-for a recognized Thunder. Recognized Thunder within 32 blocks join the encounter;
-once joined, a loaded living Thunder remains relevant even if it moves farther away.
+A living, named Thunder within 32 blocks of the player, fishing hook or encounter
+origin pauses fishing, regardless of the spawn source. This includes cocoon releases
+without the normal catch message. **Thunder -> Thunder response** is OFF by default:
+OFF keeps the temporary pause; ON runs this exclusive sequence for the selected mob:
 
-1. Use Ice Spray Wand once in the direction the player currently looks, if available.
-2. Use Ink Wand once in the current direction, if available.
-3. Use Hyperion in the current direction every four client ticks (5 CPS at 20 TPS)
-   while a relevant Thunder is within six blocks (inclusive, squared 3D distance <= 36).
-   Outside this range attacks wait and the living encounter remains active.
-4. Finish after all tracked Thunder are dead or absent beyond the recognition grace.
-   Restore the slot and resume fishing. No camera rotation or view restoration occurs,
-   including on cancellation.
+1. Use Ice Spray Wand once in the player's current direction, if available.
+2. Use Ink Wand once in the player's current direction, if available.
+3. Use Hyperion every four client ticks (5 CPS at 20 TPS) within six blocks
+   (inclusive, squared 3D distance <= 36). Outside that radius attacks wait.
+4. Keep the same target UUID through nametag gaps and temporary entity unloads.
+   After its confirmed death/absence, handle the next relevant Thunder, including
+   that mob's wand sequence. Resume fishing only when the entire encounter ends.
 
-With **2 Hyperions**, **Auto-detect Hyperions** is ON by default. The entire hotbar is
-scanned for the real Hyperion item ID and `ultimate_wise` / `ultimate_chimera` enchantment
-data. Only when enchantment data is absent are exact enchantment entries in the lore
-used as a fallback. Renaming an item to “Chimera Hyperion” does not identify its type.
-The config shows the detected slots live; moving the items updates their assignment.
-Unknown or contradictory types are rejected. Disable automatic detection to retain
-manually assigned slots 1–9, which still require enchantment validation.
-Both items and their actual enchantments must validate before use; changing
-the inventory cannot cause unrelated items to be clicked. Normal catch/hook recovery
-uses Chimera. Thunder uses Ultimate Wise above **3,000,000 HP**, and Chimera at or
-below that threshold. Unknown HP or any tracked Thunder at/below the threshold also
-selects Chimera. A switch gets a separate tick before use. The threshold does not
-predict damage: an Ultimate Wise hit from above 3M can still kill if it deals enough
-damage. In **1 Hyperion** mode the existing hotbar search is retained.
+The encounter uses the existing Jawbus lifetime: a normal spawn message bridges up
+to 200 ticks, and an acquired UUID must be absent for 100 consecutive ticks before
+it is forgotten. A loaded living mob stays relevant outside both acquisition and
+attack range. Duplicate/late chat does not restart the sequence. Catch, recast,
+five-second watchdog, pet, flare, radar and mob-recovery actions cannot bypass the
+pause, even if no valid weapon or initial HP is available. Menus, Jawbus and disabling Thunder response suspend the same
+sequence without losing its per-target weapon choice. Manual OFF and world/server changes take priority; the latter requires
+manual activation in the new world. No automatic camera rotation is performed.
 
-The fishing toggle cancels immediately. Opening a menu, death, disabling this
-option or missing Hyperion ends this action while keeping fishing enabled. Fishing
-continues automatically once prerequisites are available. Only a server/world
-change automatically switches fishing off; activate it manually in the new world.
-Old-world slot state is never applied to a new player or world. With the
-option off, other rare-creature messages briefly select the configured action weapon
-and then allow fishing to continue.
+With **2 Hyperions**, **Auto-detect Hyperions** remains ON by default. It identifies
+`HYPERION` items using `ultimate_wise` / `ultimate_chimera` enchantment data; exact
+lore enchantment entries are the fallback only when that data is absent. Disable
+auto-detection to use the existing configured hotbar slots 1–9. Every chosen item
+is validated again before use; cosmetic renaming cannot identify an enchantment.
+Normal catch/hook recovery continues to use Chimera.
+
+For the selected Thunder, use Ultimate Wise above **6,000,000 current HP**, and
+Chimera at or below that threshold. The choice is stored separately for each UUID:
+other Thunder never supply its HP, and after reaching Chimera it never switches
+back because of high/stale values. Initially unknown HP waits after the wands;
+later unknown/missing samples preserve the last choice. Current/max HP and
+abbreviations are parsed by the shared nametag reader. A slot change precedes use.
+If Chimera is missing, a valid Ultimate Wise may continue with one notice per
+encounter. If neither required weapon is usable, attacks wait until it returns.
+In **1 Hyperion** mode the selected valid Hyperion is retained across HP changes.
+The threshold is not damage prediction: an Ultimate Wise hit from above 6M can
+still kill if it deals enough damage.
+
+Cocoon evidence and identity:
+
+- [SkyHanni CocoonAPI](https://github.com/hannibal002/SkyHanni/blob/88c8bf2f566f42150e869fe9cc7b78dff05dc086/src/main/java/at/hannibal2/skyhanni/features/combat/cocoon/CocoonAPI.kt)
+  records `CAUGHT! You cocooned a ...!` as capture and documents an armor-stand
+  cocoon hatching later. This capture message is not a living-spawn trigger.
+- The existing Feesh nametag convention/entity-ID link remains the primary
+  association. Thunder/Jawbus labels are now checked before inputs each tick.
+  If that ID link is unavailable, only one matching living Elder Guardian/Iron
+  Golem beneath the label is accepted. The narrow column is documented in
+  [RFU MobManager](https://github.com/Ricciow/RiccioFishingUtils-Modern/blob/a880e66cc393d16057bdd6bcbda3e13e19028ae4/src/main/kotlin/cloud/glitchdev/rfu/data/mob/MobManager.kt#L129).
+  Ambiguous matches are rejected; an already linked tag cannot migrate to another
+  mob when its original mob disappears. No RFU runtime or credentials are used.
+- Item stacks and cocoon-only display stands cannot start an encounter. No
+  unverified release-chat marker or guessed HP was added. Live Hypixel release
+  packet captures remain necessary to confirm all server-side variants.
 
 ## Lord Jawbus fishing pause
 
 FishHelper pauses its automatic actions immediately on your exact Jawbus spawn
 message, or when the shared tracker recognizes a Lord Jawbus within 32 blocks of
 you or your fishing hook. This is a temporary action pause: FishHelper stays enabled.
-Every queued catch, pet, flare, radar, recast, mob recovery and Thunder action is
-cancelled. Neither the five-second watchdog nor an attached Water Snake/Magma Cube
+Every queued catch, pet, flare, radar, recast and mob-recovery action is cancelled.
+Thunder input is suspended while its target and weapon choice are retained. Neither the five-second watchdog nor an attached Water Snake/Magma Cube
 can issue clicks during this pause. New chat-triggered actions are blocked too.
 
 Own spawn messages reserve up to 200 client ticks (10 seconds at 20 TPS) for the
-entity/nametag to arrive; multiple pending spawns are tracked separately. Once a
+entity/nametag to arrive; duplicate notices share that bridge. Once a
 Jawbus is acquired, its living UUID stays relevant even outside the acquisition or
 attack radius and during nametag gaps. Additional nearby Jawbus join the encounter.
 Confirmed death or a zero-HP nametag removes that mob; an unloaded/absent mob must
@@ -177,12 +197,12 @@ This convention is evidenced by
 [RFU's nametag parser](https://github.com/Ricciow/RiccioFishingUtils-Modern/blob/a880e66cc393d16057bdd6bcbda3e13e19028ae4/src/main/kotlin/cloud/glitchdev/rfu/data/mob/SkyblockEntity.kt#L160)
 and the existing
 [Feesh Jawbus nametag fixture](https://github.com/Sleepy-Panda/Feesh/blob/130d48915cad7f720cec6b57d2499253bdf1dcf8/src/main/kotlin/com/github/sleepypanda/feesh/utils/EntityUtils.kt).
-Only this protocol fact is used from RFU; no RFU runtime or implementation is included.
+Only protocol facts are used from RFU; no RFU runtime or copied implementation is included.
 
 The shared tracker associates the actual display stand with the real creature UUID;
 nearby labels are not assigned to the nearest arbitrary mob. Partial/unknown HP,
 unrecognized suffixes or unread tags do not confirm a missing Shuriken. A marked
-tag hides that creature's warning at the next scan (every five client ticks).
+tag hides that creature's warning at the next scan (each client tick).
 Missing status needs two complete scans within ten ticks. Existing status survives
 short tag gaps for up to 40 client ticks, then becomes unknown. Multiple Jawbus keep
 the warning visible while any one has confirmed missing status. Entity death,
@@ -287,13 +307,20 @@ Additional Jawbus client fixtures exercise immediate cancellation during a pendi
 recast and normal catch, attached-mob recovery exclusion, nametag/range/entity gaps,
 multiple mobs, zero-HP death, Hoppity/menu waits, a fresh watchdog window, and
 manual/world OFF.
+Additional release fixtures check non-adjacent tag/model pairing, capture/item false
+positives, response OFF, cancellation before a queued recast, multiple Thunder with
+different HP, the inclusive 6M switch, unknown/stale HP, missing-weapon fallback,
+wand order, single-Hyperion mode, range/entity gaps and automatic continuation.
+GUI rows wrap titles/details instead of truncating them; tooltips have bounded width.
+All mod-owned GUI/status/keybind text is English; config keys and commands are unchanged.
+
 Still verify on the server:
 
 - Live Thunder nametag/entity pairing, user-controlled aiming, multiple nearby Thunder, packet gaps,
-  radius exit/reentry, wand cooldowns, the 3M switch and slot-only restoration.
+  radius exit/reentry, wand cooldowns, the 6M switch and slot-only restoration.
 - Main/offhand rods, Water Snake/Magma Cube hook linkage, disappearing/stubborn hooks,
   missing items and Thunder interrupting recovery.
-- Cancellation on menus, death, option disable, toggle and world changes; existing
+- Suspension on menus, cancellation on death, option disable, toggle and world changes; existing
   pet, flare, Hoppity, Grinch and movement behavior under real server timing.
 - Muting with a real SkyBlock sidebar, live Thunder sounds and the 65-second tail.
 - Real Jawbus spawn/nametag packet ordering, kills and unloads during fishing/recast,

@@ -38,7 +38,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
     private var panelWidth = 0
     private var panelHeight = 0
     private var visibleRows = 1
-    private val rowHeight = 43
+    private var rowHeight = 43
     private data class Dropdown(val owner: CascadeButton, val labels: List<String>, val choose: (Int) -> Unit,
                                 var highlighted: Int, var offset: Int = 0)
     private var dropdown: Dropdown? = null
@@ -74,11 +74,11 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                 rows += Row("Fishing pet", config.selectedPet?.name() ?: "Read your /pets pages, then choose a pet") { x, y, w ->
                     button(x, y, w, "Choose pet") { minecraft.setScreen(PetSelectionScreen(this)) }
                 }
-                toggle("Auto-Swap zur Angel außerhalb der Fishing-Sequenz", "Idle rod selection only; active actions still restore their rod", { config.autoRodSwap }) { config.autoRodSwap = it }
+                toggle("Auto-Swap to Rod Outside Fishing Sequence", "Automatically selects your rod while idle. Active fishing sequences still restore their required rod.", { config.autoRodSwap }) { config.autoRodSwap = it }
                 number("Flare swap delay", "Client ticks between select / use / restore (default 3 = 150 ms)", { config.flareSwapDelayTicks.toString() }, false) {
                     config.flareSwapDelayTicks = it.toInt().coerceIn(1, 20)
                 }
-                choice("Hyperions", "Chimera for kills; Ultimate Wise lowers Thunder above 3M HP", listOf("1 Hyperion", "2 Hyperions"), { if (config.twoHyperions) 1 else 0 }) {
+                choice("Hyperions", "Chimera for kills; Ultimate Wise lowers Thunder above 6M HP", listOf("1 Hyperion", "2 Hyperions"), { if (config.twoHyperions) 1 else 0 }) {
                     config.twoHyperions = it == 1
                     rebuild()
                 }
@@ -87,12 +87,12 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                         config.autoDetectHyperions = it; rebuild()
                     }
                     if (!config.autoDetectHyperions) {
-                        slotSlider("Ultimate-Wise-Hyperion", "Hotbar slot 1–9; must contain an Ultimate Wise Hyperion", { config.ultimateWiseSlot }) { config.ultimateWiseSlot = it }
-                        slotSlider("Chimera-Hyperion", "Different hotbar slot 1–9; must contain a Chimera Hyperion", { config.chimeraSlot }) { config.chimeraSlot = it }
+                        slotSlider("Ultimate Wise Hyperion", "Hotbar slot 1–9; must contain an Ultimate Wise Hyperion", { config.ultimateWiseSlot }) { config.ultimateWiseSlot = it }
+                        slotSlider("Chimera Hyperion", "Different hotbar slot 1–9; must contain a Chimera Hyperion", { config.chimeraSlot }) { config.chimeraSlot = it }
                     }
                     info("Hyperion detection", "")
                     liveDetails["Hyperion detection"] = { hyperionStatus() }
-                    info("Item checks", "Enchantments checked again before use; both types required")
+                    info("Item checks", "Enchantments checked before use. Thunder can keep using Ultimate Wise if Chimera is missing.")
                 }
                 toggle("Slugfish timing", "Wait 10 seconds, adjusted for your ping", { config.slugfishReelEnabled }) {
                     config.slugfishReelEnabled = it
@@ -111,12 +111,12 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                 toggle("Thunder Muter", "Mute lightning/guardian sounds in SkyBlock; independent of FishHelper", { config.thunderMuterEnabled }) {
                     config.thunderMuterEnabled = it
                 }
-                toggle("Thunder response", "Interrupt fishing when your Thunder spawn message appears", { config.thunderResponseEnabled }) {
+                toggle("Thunder response", "Handle nearby Thunder, including cocoon releases. When OFF, fishing still pauses until Thunder is gone.", { config.thunderResponseEnabled }) {
                     config.thunderResponseEnabled = it
                 }
                 info("01  Ice Spray", "Use in your current view direction; your camera stays under your control.")
                 info("02  Ink Wand", "Use Ink Wand in your current view direction if available.")
-                info("03  Hyperion", "Current view, 5 CPS within 6 blocks. Two Hyperions: switch to Chimera at 3M HP; unknown HP also uses Chimera.")
+                info("03  Hyperion", "5 CPS within 6 blocks. Switch to Chimera at 6M HP or less. Wait for initial HP; missing updates keep the last choice.")
                 info("Return to fishing", "Restore the slot only. No camera changes on completion or cancellation.")
             }
             Tab.GENERAL -> {
@@ -144,6 +144,12 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
             }
         }
 
+        rowHeight = max(43, rows.indices.maxOfOrNull { index ->
+            val row = rows[index]
+            wrap(row.title, textWidth(index), 11).size * 13 +
+                wrap(liveDetails[row.title]?.invoke() ?: row.detail, textWidth(index), 9).size * 11 + 14
+        } ?: 43)
+        visibleRows = max(1, (panelHeight - 134) / rowHeight)
         val tabWidth = (panelWidth - 32) / 3
         Tab.entries.forEachIndexed { index, value ->
             button(panelX + 12 + index * (tabWidth + 4), panelY + 47, tabWidth, value.label, value == tab) {
@@ -355,15 +361,19 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
         drawText(graphics, "Make every cast count.", panelX + 23, panelY + 28, MUTED, 9)
         rows.drop(scroll).take(visibleRows).forEachIndexed { index, row ->
             val y = panelY + 79 + index * rowHeight
-            graphics.roundedRectangle((panelX + 12).toFloat(), y.toFloat(), (panelWidth - 24).toFloat(), 39f, 0xFF1B2536.toInt(), CascadeGeometricRadius(6f))
+            graphics.roundedRectangle((panelX + 12).toFloat(), y.toFloat(), (panelWidth - 24).toFloat(), (rowHeight - 4).toFloat(), 0xFF1B2536.toInt(), CascadeGeometricRadius(6f))
             graphics.nextStratum()
-            val textWidth = if (tab == Tab.THUNDER && scroll + index > 1) panelWidth - 44 else panelWidth - min(128, panelWidth / 3) - 56
-            drawText(graphics, ellipsize(row.title, textWidth, 11), panelX + 22, y + 5, TEXT, 11)
+            val textWidth = textWidth(scroll + index)
+            var textY = y + 5
+            wrap(row.title, textWidth, 11).forEach { line ->
+                drawText(graphics, line, panelX + 22, textY, TEXT, 11); textY += 13
+            }
             val currentDetail = liveDetails[row.title]?.invoke() ?: row.detail
-            val detail = ellipsize(currentDetail, textWidth, 9)
-            drawText(graphics, detail, panelX + 22, y + 23, MUTED, 9)
-            if (dropdown == null && mouseX >= panelX + 12 && mouseX < panelX + panelWidth - 12 && mouseY >= y && mouseY < y + 39) {
-                graphics.setTooltipForNextFrame(Component.literal("${row.title}: $currentDetail"), mouseX, mouseY)
+            wrap(currentDetail, textWidth, 9).forEach { line ->
+                drawText(graphics, line, panelX + 22, textY, MUTED, 9); textY += 11
+            }
+            if (dropdown == null && mouseX >= panelX + 12 && mouseX < panelX + panelWidth - 12 && mouseY >= y && mouseY < y + rowHeight - 4) {
+                graphics.setTooltipForNextFrame(font, font.split(Component.literal("${row.title}\n$currentDetail"), min(240, width - 24)), mouseX, mouseY)
             }
         }
         val last = min(scroll + visibleRows, rows.size)
@@ -406,6 +416,28 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
     }
 
     override fun isPauseScreen() = false
+
+    private fun textWidth(index: Int): Int =
+        if (tab == Tab.THUNDER && index > 1) panelWidth - 44 else panelWidth - min(128, panelWidth / 3) - 56
+
+    /** Wrap at word boundaries, splitting a long word only when it cannot fit on its own. */
+    private fun wrap(text: String, maxWidth: Int, size: Int): List<String> {
+        val lines = mutableListOf<String>()
+        var line = ""
+        for (word in text.split(Regex("\\s+"))) {
+            val next = if (line.isEmpty()) word else "$line $word"
+            if (CascadeFonts.sans.width(next, size) <= maxWidth) { line = next; continue }
+            if (line.isNotEmpty()) { lines += line; line = "" }
+            for (char in word) {
+                if (line.isNotEmpty() && CascadeFonts.sans.width(line + char, size) > maxWidth) {
+                    lines += line; line = ""
+                }
+                line += char
+            }
+        }
+        if (line.isNotEmpty()) lines += line
+        return lines
+    }
 
     internal class CascadeButton(x: Int, y: Int, w: Int, h: Int, label: Component, var selected: Boolean, press: (CascadeButton) -> Unit) :
         Button(x, y, w, h, label, OnPress { press(it as CascadeButton) }, DEFAULT_NARRATION) {

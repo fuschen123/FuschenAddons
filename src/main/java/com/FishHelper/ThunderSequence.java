@@ -54,7 +54,7 @@ public final class ThunderSequence {
             case INK_USE -> useWand(controls, Item.INK_WAND, Stage.HYPERION_SELECT);
             case HYPERION_SELECT -> {
                 if (!controls.select(Item.HYPERION)) {
-                    cancel();
+                    waitTicks = 4; // Missing HP/items suspend attacks, never resume fishing into a live mob.
                     return;
                 }
                 stage = Stage.HYPERION_USE;
@@ -63,7 +63,7 @@ public final class ThunderSequence {
             case HYPERION_USE -> {
                 // Leaving six blocks pauses attacks, not the encounter. Identity memory handles gaps.
                 if (!controls.hasThunderInAttackRange()) return;
-                if (!controls.use(Item.HYPERION)) cancel();
+                controls.use(Item.HYPERION);
                 waitTicks = 4; // 5 right clicks per second at 20 TPS.
             }
             case DONE -> { }
@@ -83,8 +83,8 @@ public final class ThunderSequence {
             return;
         }
         // Revalidate the selected stack: an item moved during the swap must not be used.
-        controls.use(item);
-        stage = next;
+        boolean used = controls.use(item);
+        stage = used ? next : item == Item.ICE_SPRAY ? Stage.ICE_SELECT : Stage.INK_SELECT;
         waitTicks = 2;
     }
 }

@@ -94,6 +94,7 @@ public class SmokeClient implements ClientModInitializer {
         JawbusSmokeChecks.run(this, c);
         ShurikenSmokeChecks.run(this, c);
         SequenceSmokeChecks.run(this, c);
+        CocoonSmokeChecks.run(this, c);
     }
     int ticks, step;
     ConfigScreen screen;
@@ -119,6 +120,10 @@ public class SmokeClient implements ClientModInitializer {
             if(client.getOverlay()!=null || ticks<100 || ticks%40!=0) return;
             switch(step++) {
                 case 0 -> {
+                    // Deterministic dev-only config, including after an interrupted previous run.
+                    Config.INSTANCE=new Config();
+                    ModBindings.bind("toggle",com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM.getOrCreate(Config.INSTANCE.toggleKeyCode));
+                    ModBindings.saveBindings();
                     FishHelperClient.registerCommands(commands);
                     client.options.guiScale().set(1); client.resizeGui();
                     command("fa"); check(client.screen instanceof ConfigScreen,"/fa"); screen=(ConfigScreen)client.screen;
@@ -203,6 +208,22 @@ public class SmokeClient implements ClientModInitializer {
                 case 13 -> {
                     screenshot("jawbus-shuriken-warning.png");
                     ShurikenSmokeChecks.finishPreview(client);
+                    command("fa");screen=(ConfigScreen)client.screen;value(screen,"scroll",5);rebuild();
+                }
+                case 14 -> {
+                    screenshot("english-rod-wrapping.png");
+                    client.options.guiScale().set(2);client.resizeGui();value(screen,"scroll",5);rebuild();
+                }
+                case 15 -> {
+                    screenshot("english-rod-compact.png");
+                    var rows=(java.util.List<?>)field(screen,"rows");
+                    var row=rows.get(5);check(field(row,"title").equals("Auto-Swap to Rod Outside Fishing Sequence"),"English rod title exact");
+                    check(field(row,"detail").equals("Automatically selects your rod while idle. Active fishing sequences still restore their required rod."),"English rod description exact");
+                    check((int)field(screen,"rowHeight") <= (int)field(screen,"panelHeight")-134,"wrapped row fits compact panel");
+                    client.options.guiScale().set(1);client.resizeGui();click("Thunder");value(screen,"scroll",2);rebuild();
+                }
+                case 16 -> {
+                    screenshot("english-thunder-wrapping.png");
                     java.nio.file.Files.writeString(java.nio.file.Path.of("../build/smoke-result.txt"), "PASS");
                     System.out.println("SMOKE_RUNTIME_OK: real client rod slots/offhand, stale hook reconciliation, watchdog, legitimate waits, temporary actions, manual off and world disable");
                     client.stop();

@@ -146,9 +146,9 @@ final class SequenceSmokeChecks {
             for(int i=0;i<30;i++){c.player.setYRot(37+i);c.player.setXRot(-15+i);float yaw=c.player.getYRot(),pitch=c.player.getXRot();response.tick();
                 t.check(c.player.getYRot()==yaw && c.player.getXRot()==pitch,"Thunder never rotates camera during wand/Hyperion use");}
             t.check(input.uses.stream().anyMatch(s->s.contains(":0:Hyperion")),"high HP Thunder uses Ultimate Wise");
-            label.setCustomName(Component.literal("[Lv400] Thunder 3M/35M❤"));for(int i=0;i<6;i++)SeaCreatureTracker.INSTANCE.tick(c);
+            label.setCustomName(Component.literal("[Lv400] Thunder 6M/35M❤"));for(int i=0;i<6;i++)SeaCreatureTracker.INSTANCE.tick(c);
             int count=input.uses.size();for(int i=0;i<12;i++)response.tick();
-            t.check(input.uses.subList(count,input.uses.size()).stream().anyMatch(s->s.contains(":1:Hyperion")),"3M Thunder switches to Chimera");
+            t.check(input.uses.subList(count,input.uses.size()).stream().anyMatch(s->s.contains(":1:Hyperion")),"6M Thunder switches to Chimera");
             for (double distance : new double[]{5.99, 6.0, 6.01}) {
                 thunder.setPos(c.player.position().add(distance,0,0)); count=input.uses.size();
                 for(int i=0;i<12;i++)response.tick();
@@ -187,7 +187,7 @@ final class SequenceSmokeChecks {
             t.check(center.get(null).equals(c.player.position()),"movement center uses actual current position");
             RandomMovementFeature.reset(c);t.check(center.get(null)==null,"world reset discards movement center");
             MovementSmokeChecks.run(t,c);
-            System.out.println("SMOKE_SEQUENCES_OK: pet UUID/retry/active/foreign-menu, auto-rod, hook fifth tick, Hyperion validation/3M/no rotation, periodic delayed flares, mouse/keyboard persistence, movement center");
+            System.out.println("SMOKE_SEQUENCES_OK: pet UUID/retry/active/foreign-menu, auto-rod, hook fifth tick, Hyperion validation/6M/no rotation, periodic delayed flares, mouse/keyboard persistence, movement center");
         } finally {
             if((boolean)t.mod("enabled"))t.mod("enabled",false);
             c.setScreen(null);c.player.containerMenu=c.player.inventoryMenu;c.gameMode=originalGameMode;Config.INSTANCE=originalConfig;

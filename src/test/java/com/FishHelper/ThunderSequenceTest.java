@@ -68,13 +68,16 @@ class ThunderSequenceTest {
         assertTrue(c.used.stream().allMatch(i -> i == HYPERION));
     }
 
-    @Test void noHyperionAbortsAfterWands() {
+    @Test void missingHyperionWaitsAfterWandsAndResumesWhenAvailable() {
         var s = new ThunderSequence(); var c = new Controls();
         c.items.remove(HYPERION);
         ticks(s, c, 30);
         assertEquals(List.of(ICE_SPRAY, INK_WAND), c.used);
-        assertFalse(s.active());
-        assertTrue(s.aborted());
+        assertTrue(s.active());
+        assertFalse(s.aborted());
+        c.items.add(HYPERION); ticks(s, c, 20);
+        assertEquals(1, c.used.stream().filter(i -> i == ICE_SPRAY).count());
+        assertTrue(c.used.contains(HYPERION));
     }
 
     @Test void missingSpawnTimesOutWithoutUsingAnything() {
@@ -128,6 +131,26 @@ class ThunderSequenceTest {
         var s = new ThunderSequence(); var c = new Controls();
         ticks(s, c, 2); s.cancel(); ticks(s, c, 100);
         assertTrue(c.used.isEmpty()); assertFalse(s.active());
+    }
+
+    @Test void interruptedWandUseReselectsBeforeProceeding() {
+        var sequence = new ThunderSequence();
+        List<ThunderSequence.Item> used = new ArrayList<>();
+        var controls = new ThunderSequence.Controls() {
+            ThunderSequence.Item selected;
+            boolean interrupted;
+            public boolean findThunder() { return true; }
+            public boolean hasThunderTarget() { return true; }
+            public boolean hasLivingThunder() { return true; }
+            public boolean hasThunderInAttackRange() { return true; }
+            public boolean select(ThunderSequence.Item item) { selected = item; return true; }
+            public boolean use(ThunderSequence.Item item) {
+                if (!interrupted) { interrupted = true; selected = null; return false; }
+                assertEquals(selected, item); used.add(item); return true;
+            }
+        };
+        for (int i=0;i<40;i++) sequence.tick(controls);
+        assertEquals(List.of(ICE_SPRAY, INK_WAND), used.subList(0, 2));
     }
 
     @Test void hyperionClicksAreFourTicksApart() {
