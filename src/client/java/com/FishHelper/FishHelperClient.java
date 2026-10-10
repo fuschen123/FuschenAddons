@@ -60,6 +60,7 @@ public class FishHelperClient implements ClientModInitializer {
     private static final FishingWatchdog WATCHDOG = new FishingWatchdog();
     private static final ActionDeadline ACTION_DEADLINE = new ActionDeadline();
     private static final JawbusPauseFeature JAWBUS_PAUSE = new JawbusPauseFeature();
+    private static final SeaCreatureEncounter THUNDER_PAUSE = new SeaCreatureEncounter("Thunder");
     private static int recoveryRetryTicks, rareCreatureTicks;
     private static int rareRestoreSlot = -1;
     private static boolean petAfterRecovery, pendingRecast;
@@ -151,7 +152,11 @@ public class FishHelperClient implements ClientModInitializer {
                 return;
             }
             // Chat-triggered Thunder, Hoppity or rare-mob actions cannot bypass this input owner.
-            if (JAWBUS_PAUSE.active()) return;
+            if (enabled && !overlay && ThunderResponseFeature.SPAWN_MESSAGE.equals(plainMessage)) {
+                if (THUNDER_PAUSE.spawned(client) == JawbusPause.Change.STARTED) beginThunderPause(client);
+                return;
+            }
+            if (JAWBUS_PAUSE.active() || THUNDER_PAUSE.active()) return;
 
             if (enabled && client.player != null) {
                 if (thunderResponse == null && hookRecovery == null && !hoppityAwaitingYes && !hoppityAwaitingWindow
@@ -171,12 +176,6 @@ public class FishHelperClient implements ClientModInitializer {
                                 STATUS_PREFIX + " §eHoppity offer accepted; checking the window"));
                     }
                 }
-            }
-
-            if (enabled && hoppityPauseTicks == 0 && !overlay && Config.INSTANCE.thunderResponseEnabled
-                    && ThunderResponseFeature.SPAWN_MESSAGE.equals(plainMessage)) {
-                beginThunderResponse(client);
-                return;
             }
 
             if (enabled && hoppityPauseTicks == 0 && thunderResponse == null && STOP_MESSAGES.contains(plainMessage)) {
@@ -220,6 +219,7 @@ public class FishHelperClient implements ClientModInitializer {
             while (TOGGLE_KEY.consumeClick()) {
                 resetActions(client.player, true);
                 JAWBUS_PAUSE.reset();
+                THUNDER_PAUSE.reset();
                 enabled = !enabled;
 
                 if (client.player != null) {
@@ -242,32 +242,36 @@ public class FishHelperClient implements ClientModInitializer {
             JawbusPause.Change jawbusChange = JAWBUS_PAUSE.tick(client);
             if (jawbusChange == JawbusPause.Change.STARTED) beginJawbusPause(client);
             if (jawbusChange == JawbusPause.Change.ENDED) {
-                resetFishingActions(client.player, true);
+                resetForJawbus(client.player);
                 client.player.sendSystemMessage(Component.literal(STATUS_PREFIX + " §bJawbus pause ended"));
                 return; // Recheck menus/Hoppity/death next tick; never re-enable the helper here.
             }
-            if (JAWBUS_PAUSE.active()) return;
+            JawbusPause.Change thunderChange = THUNDER_PAUSE.tick(client);
+            if (thunderChange == JawbusPause.Change.STARTED && !JAWBUS_PAUSE.active()) beginThunderPause(client);
+            if (thunderChange == JawbusPause.Change.ENDED) {
+                resetFishingActions(client.player, true);
+                client.player.sendSystemMessage(Component.literal(STATUS_PREFIX + " §bThunder encounter ended"));
+                return;
+            }
+            if (JAWBUS_PAUSE.active()) {
+                if (thunderResponse != null && thunderResponse.canContinue()) thunderResponse.tick(false);
+                return;
+            }
+            if (THUNDER_PAUSE.active()) {
+                if (thunderResponse == null && Config.INSTANCE.thunderResponseEnabled
+                        && hoppityPauseTicks == 0 && !hoppityAwaitingYes && !hoppityAwaitingWindow)
+                    beginThunderResponse(client);
+                if (thunderResponse != null) {
+                    if (!thunderResponse.canContinue()) finishThunderResponse();
+                    else thunderResponse.tick(Config.INSTANCE.thunderResponseEnabled);
+                }
+                return; // The encounter owns all input, even with response OFF or missing HP/items.
+            }
             if (recoveryRetryTicks > 0) recoveryRetryTicks--;
             UUID currentHook = client.player == null ? null : hookUuid(findOwnedBobber(client, client.player));
             if (WATCHDOG.observe(currentHook)) {
                 lastProblem = "";
                 if (currentHook != null && !HOOK_ENCOUNTERS.wasReeled(currentHook)) pendingRecast = false;
-            }
-
-            if (thunderResponse != null) {
-                if (!thunderResponse.canContinue()) {
-                    finishThunderResponse();
-                    recoveryRetryTicks = 100;
-                    WATCHDOG.failed();
-                } else if (!thunderResponse.tick()) {
-                    boolean aborted = thunderResponse.aborted();
-                    finishThunderResponse();
-                    if (aborted) reportProblem(client.player, "thunder", "Thunder action ended; fishing will continue automatically");
-                    else pendingRecast = true; // Thunder died; restart fishing on the next tick.
-                    recoveryRetryTicks = aborted ? 100 : 0;
-                    if (aborted) WATCHDOG.failed();
-                }
-                return; // No fishing, pet, flare, radar or Grinch input in a Thunder tick.
             }
 
             if (hookRecovery != null) {
@@ -661,8 +665,7 @@ public class FishHelperClient implements ClientModInitializer {
         hotspotRadarTimer = 0;
         hotspotRadarSlot = -1;
         hotspotRadarRestoreSlot = -1;
-        thunderResponse = new ThunderResponseFeature(client, restoreSlot, origin);
-        client.player.sendSystemMessage(Component.literal(STATUS_PREFIX + " §bThunder response started"));
+        thunderResponse = new ThunderResponseFeature(client, restoreSlot, origin, THUNDER_PAUSE);
     }
 
     private static void finishThunderResponse() {
@@ -697,7 +700,7 @@ public class FishHelperClient implements ClientModInitializer {
     }
 
     private static void beginRecast(Minecraft client, UUID hook, UUID mob, boolean attack, boolean pet) {
-        if (!enabled || JAWBUS_PAUSE.active() || hookRecovery != null || thunderResponse != null || client.player == null || client.screen != null) return;
+        if (!enabled || JAWBUS_PAUSE.active() || THUNDER_PAUSE.active() || hookRecovery != null || thunderResponse != null || client.player == null || client.screen != null) return;
         finishRareCreature(client.player);
         if (attack) recoveryAttemptMob = mob;
         hookRecovery = new HookRecoveryFeature(client, hook, mob, rodSelectedSlotForAction, rodHandForAction, attack, HOOK_ENCOUNTERS);
@@ -1033,6 +1036,7 @@ public class FishHelperClient implements ClientModInitializer {
         boolean wasEnabled = enabled;
         enabled = false;
         JAWBUS_PAUSE.reset();
+        THUNDER_PAUSE.reset();
         while (TOGGLE_KEY.consumeClick()) { /* Do not carry an activation queued in the old world across. */ }
         resetActions(player, false);
         HOOK_ENCOUNTERS.clear();
@@ -1053,8 +1057,26 @@ public class FishHelperClient implements ClientModInitializer {
 
     private static void beginJawbusPause(Minecraft client) {
         RandomMovementFeature.suspend(client);
-        resetFishingActions(client.player, true);
+        resetForJawbus(client.player);
         client.player.sendSystemMessage(Component.literal(STATUS_PREFIX + " §eJawbus nearby; fishing paused"));
+    }
+
+    private static void resetForJawbus(LocalPlayer player) {
+        // Retain Thunder identity/weapon latch and sequence position while Jawbus owns the pause.
+        var suspendedThunder = thunderResponse;
+        thunderResponse = null;
+        resetFishingActions(player, true);
+        thunderResponse = suspendedThunder;
+        if (suspendedThunder != null) suspendedThunder.restoreSlot();
+    }
+
+    private static void beginThunderPause(Minecraft client) {
+        RandomMovementFeature.suspend(client);
+        if ((fishingAction == 5 || fishingAction == 6)
+                && client.screen instanceof AbstractContainerScreen<?> screen
+                && isPetsMenu(screen.getTitle().getString())) client.setScreen(null);
+        resetFishingActions(client.player, true);
+        client.player.sendSystemMessage(Component.literal(STATUS_PREFIX + " §eThunder nearby; fishing paused"));
     }
 
     /** Cancels every queued fishing input without clearing independent Hoppity/menu waits. */
@@ -1152,7 +1174,7 @@ public class FishHelperClient implements ClientModInitializer {
 
     /** Movement can never take input during an exclusive fishing action or pause. */
     public static boolean movementPaused() {
-        return JAWBUS_PAUSE.active() || thunderResponse != null || hookRecovery != null || flare != null
+        return JAWBUS_PAUSE.active() || THUNDER_PAUSE.active() || thunderResponse != null || hookRecovery != null || flare != null
                 || fishingAction >= 0 || hotspotRadarStage > 0 || hoppityPauseTicks > 0 || rareCreatureTicks > 0;
     }
 }

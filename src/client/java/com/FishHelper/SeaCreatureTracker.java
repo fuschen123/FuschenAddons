@@ -10,6 +10,7 @@ import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.monster.ElderGuardian;
 import net.minecraft.world.entity.monster.Slime;
 import net.minecraft.world.entity.monster.MagmaCube;
+import net.minecraft.world.entity.animal.golem.IronGolem;
 import net.minecraft.world.entity.player.Player;
 import java.util.*;
 
@@ -21,16 +22,17 @@ final class SeaCreatureTracker {
     private long ticks;
     private UUID hudTarget;
     private final Set<UUID> confirmedDeaths = new HashSet<>();
+    private final Map<UUID, UUID> nametagLinks = new HashMap<>();
     private final Map<UUID, JawbusShurikenWarning.Status> shurikenObservations = new HashMap<>();
 
-    void reset() { memory.clear(); confirmedDeaths.clear(); shurikenObservations.clear(); hudTarget = null; ticks = 0; world = null; }
+    void reset() { memory.clear(); nametagLinks.clear(); confirmedDeaths.clear(); shurikenObservations.clear(); hudTarget = null; ticks = 0; world = null; }
     boolean confirmedDead(UUID uuid) { return confirmedDeaths.contains(uuid); }
     Map<UUID, JawbusShurikenWarning.Status> shurikenObservations() { return Map.copyOf(shurikenObservations); }
 
     void tick(Minecraft client) {
         confirmedDeaths.clear();
         shurikenObservations.clear();
-        if (world != client.level) { memory.clear(); hudTarget = null; ticks = 0; world = client.level; }
+        if (world != client.level) { memory.clear(); nametagLinks.clear(); hudTarget = null; ticks = 0; world = client.level; }
         if (world == null) return;
         ticks++;
         Map<UUID, SeaCreatureMemory.Presence> presence = new HashMap<>();
@@ -38,7 +40,7 @@ final class SeaCreatureTracker {
         for (Entity entity : world.entitiesForRendering()) {
             presence.put(entity.getUUID(), entity.isAlive() && !entity.isRemoved()
                     ? SeaCreatureMemory.Presence.ALIVE : SeaCreatureMemory.Presence.DEAD);
-            if (ticks % 5 != 1 || !(entity instanceof ArmorStand) || entity.getCustomName() == null) continue;
+            if (!(entity instanceof ArmorStand) || entity.getCustomName() == null) continue;
             // Skip obfuscated glyphs at the component level instead of copying Feesh's formatter.
             StringBuilder text = new StringBuilder();
             entity.getCustomName().visit((style, part) -> {
@@ -47,7 +49,10 @@ final class SeaCreatureTracker {
             }, net.minecraft.network.chat.Style.EMPTY);
             SeaCreatureNametag tag = SeaCreatureNametag.parse(text.toString());
             if (tag == null) continue;
+            boolean encounter = tag.name().equals("Thunder") || tag.name().equals("Lord Jawbus");
+            if (!encounter && ticks % 5 != 1) continue;
             Entity mob = world.getEntity(entity.getId() - SeaCreatureNametag.entityOffset(tag.name()));
+            if (encounter) mob = encounterMob(entity, mob, tag.name());
             if (tag.name().equals("Jawbus Follower") && mob instanceof Slime && !(mob instanceof MagmaCube))
                 mob = world.getEntity(entity.getId() - 11);
             if (!(mob instanceof LivingEntity || mob instanceof Display.ItemDisplay) || mob instanceof ArmorStand) continue;
@@ -62,12 +67,47 @@ final class SeaCreatureTracker {
             }
         }
         memory.update(ticks, observations, presence);
+        nametagLinks.keySet().removeIf(uuid -> !presence.containsKey(uuid));
         for (SeaCreatureMemory.Observation observation : observations)
             if (observation.nametag().dead()) confirmedDeaths.add(observation.uuid());
         presence.forEach((uuid, state) -> { if (state == SeaCreatureMemory.Presence.DEAD) confirmedDeaths.add(uuid); });
     }
 
     Collection<SeaCreatureMemory.Entry> creatures() { return memory.entries(); }
+
+    /** Cocoon releases can use a new model/nametag pair. Prefer the established ID link;
+     * if it is unavailable, accept only a unique matching living model underneath the tag.
+     * RFU MobManager documents the same narrow column (-4..+0.5 Y, +/-0.5 X/Z).
+     * Ambiguous stacked mobs are never assigned another creature's HP. */
+    private Entity encounterMob(Entity label, Entity adjacent, String name) {
+        UUID linked = nametagLinks.get(label.getUUID());
+        if (linked != null) {
+            for (Entity mob : world.entitiesForRendering())
+                if (mob.getUUID().equals(linked)) return encounterModel(mob, name) ? mob : null;
+            return null; // An orphaned tag must never migrate to another living mob.
+        }
+        if (encounterModel(adjacent, name) && underTag(label, adjacent)) {
+            nametagLinks.put(label.getUUID(), adjacent.getUUID());
+            return adjacent;
+        }
+        Entity only = null;
+        for (Entity candidate : world.entitiesForRendering()) {
+            if (!encounterModel(candidate, name) || !underTag(label, candidate)) continue;
+            if (only != null) return null;
+            only = candidate;
+        }
+        if (only != null) nametagLinks.put(label.getUUID(), only.getUUID());
+        return only;
+    }
+    private static boolean encounterModel(Entity mob, String name) {
+        return mob != null && mob.isAlive() && !mob.isRemoved()
+                && (name.equals("Thunder") ? mob instanceof ElderGuardian : mob instanceof IronGolem);
+    }
+    private static boolean underTag(Entity label, Entity mob) {
+        double dy = label.getY() - mob.getY();
+        return Math.abs(label.getX() - mob.getX()) <= .5 && Math.abs(label.getZ() - mob.getZ()) <= .5
+                && dy >= -.5 && dy <= 4;
+    }
     SeaCreatureMemory.Entry get(UUID id) { return memory.get(id); }
     Entity entity(SeaCreatureMemory.Entry entry) {
         Entity entity = world == null ? null : world.getEntity(entry.entityId());

@@ -3,18 +3,14 @@ package com.FishHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.monster.ElderGuardian;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
+import java.util.*;
 
-import java.util.Locale;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
-
-/** Owns hotbar input only for the encounter started by Thunder's spawn message. */
+/** Exclusive input owner for a named, living Thunder encounter, regardless of spawn source. */
 final class ThunderResponseFeature implements ThunderSequence.Controls {
     static final String SPAWN_MESSAGE = "You hear a massive rumble as Thunder emerges.";
     private final Minecraft client;
@@ -22,130 +18,133 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
     private final ClientLevel level;
     private final int restoreSlot;
     private final Vec3 spawnOrigin;
-    private final ThunderSequence sequence = new ThunderSequence();
-    private ElderGuardian target;
-    private final Set<UUID> encounter = new HashSet<>();
-    private final SeaCreatureTracker tracker = SeaCreatureTracker.INSTANCE;
+    private final SeaCreatureEncounter encounter;
+    private final boolean ownsEncounter;
+    private final Map<UUID, HyperionPolicy> weaponChoices = new HashMap<>();
+    private ThunderSequence sequence = new ThunderSequence();
+    private JawbusPause.Target target;
+    private boolean missingItemReported;
+    private int singleHyperionSlot = -1;
 
     ThunderResponseFeature(Minecraft client, int restoreSlot, Vec3 spawnOrigin) {
-        this.client = client;
-        this.player = client.player;
-        this.level = client.level;
-        this.restoreSlot = restoreSlot;
-        this.spawnOrigin = spawnOrigin;
+        this(client, restoreSlot, spawnOrigin, new SeaCreatureEncounter("Thunder"), true);
+    }
+    ThunderResponseFeature(Minecraft client, int restoreSlot, Vec3 spawnOrigin, SeaCreatureEncounter encounter) {
+        this(client, restoreSlot, spawnOrigin, encounter, false);
+    }
+    private ThunderResponseFeature(Minecraft client, int restoreSlot, Vec3 spawnOrigin,
+                                   SeaCreatureEncounter encounter, boolean ownsEncounter) {
+        this.client = client; this.player = client.player; this.level = client.level;
+        this.restoreSlot = restoreSlot; this.spawnOrigin = spawnOrigin;
+        this.encounter = encounter; this.ownsEncounter = ownsEncounter;
     }
 
     boolean canContinue() {
-        return Config.INSTANCE.thunderResponseEnabled && client.player == player && client.level == level
-                && player.isAlive() && client.gameMode != null && client.screen == null;
+        return client.player == player && client.level == level
+                && player.isAlive() && client.gameMode != null;
     }
-
-    boolean tick() {
-        collectEncounter();
-        sequence.tick(this);
-        return sequence.active();
-    }
-
-    boolean aborted() { return sequence.aborted(); }
-
-    private void collectEncounter() {
-        for (SeaCreatureMemory.Entry entry : tracker.creatures()) {
-            Entity mob = tracker.entity(entry);
-            if (entry.nametag().name().equals("Thunder") && mob instanceof ElderGuardian
-                    && mob.distanceToSqr(player) <= 32 * 32) encounter.add(entry.uuid());
+    boolean tick() { return tick(true); }
+    boolean tick(boolean allowInput) {
+        if (ownsEncounter) encounter.tick(client);
+        // Keep the same UUID and its latched weapon choice through gaps/range changes.
+        if (target != null) {
+            var retained = encounter.targets().stream().filter(t -> t.uuid().equals(target.uuid())).findFirst();
+            if (retained.isPresent()) target = retained.get();
+            else { target = null; sequence = new ThunderSequence(); }
         }
-        encounter.removeIf(id -> tracker.get(id) == null);
+        if (target == null && !findThunder()) return encounter.active();
+        var entry = SeaCreatureTracker.INSTANCE.get(target.uuid());
+        weaponChoices.computeIfAbsent(target.uuid(), id -> new HyperionPolicy())
+                .thunder(entry == null ? null : entry.nametag().currentHp());
+        if (allowInput && client.screen == null) sequence.tick(this);
+        return encounter.active();
     }
+    boolean aborted() { return sequence.aborted(); }
 
     void finish() {
         sequence.cancel();
-        // Never apply an old world's hotbar snapshot to a new player or level.
-        if (client.player == player && client.level == level) {
-            player.getInventory().setSelectedSlot(restoreSlot);
-        }
+        restoreSlot();
+    }
+    void restoreSlot() {
+        if (client.player == player && client.level == level) player.getInventory().setSelectedSlot(restoreSlot);
     }
 
-    @Override
-    public boolean findThunder() {
-        double bestScore = Double.MAX_VALUE;
-        target = null;
-        for (UUID id : encounter) {
-            SeaCreatureMemory.Entry entry = tracker.get(id);
-            if (entry == null || !(tracker.entity(entry) instanceof ElderGuardian guardian)) continue;
-            double score = guardian.position().distanceToSqr(spawnOrigin);
-            if (score < bestScore) {
-                target = guardian;
-                bestScore = score;
-            }
-        }
-        return target != null;
+    private ElderGuardian resolvedTarget() {
+        if (target == null) return null;
+        var mob = encounter.resolve(client, target);
+        return mob instanceof ElderGuardian guardian && guardian.isAlive() && !guardian.isRemoved()
+                && !SeaCreatureTracker.INSTANCE.confirmedDead(target.uuid()) ? guardian : null;
+    }
+    @Override public boolean findThunder() {
+        if (target != null) return resolvedTarget() != null;
+        target = encounter.targets().stream().filter(t -> encounter.resolve(client, t) instanceof ElderGuardian)
+                .min(Comparator.<JawbusPause.Target>comparingDouble(t -> encounter.resolve(client, t).position().distanceToSqr(spawnOrigin))
+                        .thenComparing(t -> t.uuid().toString())).orElse(null);
+        return resolvedTarget() != null;
+    }
+    @Override public boolean hasThunderTarget() { return resolvedTarget() != null; }
+    @Override public boolean hasLivingThunder() { return encounter.active(); }
+    @Override public boolean hasThunderInAttackRange() {
+        var mob = resolvedTarget();
+        return mob != null && ThunderSequence.inAttackRange(mob.distanceToSqr(player));
     }
 
-    @Override
-    public boolean hasThunderTarget() { return findThunder(); }
+    private int hyperionSlot() {
+        if (!Config.INSTANCE.twoHyperions) {
+            if (singleHyperionSlot >= 0 && HyperionAccess.hyperion(player.getInventory().getItem(singleHyperionSlot)))
+                return singleHyperionSlot;
+            singleHyperionSlot = HyperionAccess.find(player, HyperionPolicy.Kind.CHIMERA);
+            return singleHyperionSlot;
+        }
+        if (target == null) return -1;
+        var entry = SeaCreatureTracker.INSTANCE.get(target.uuid());
+        var kind = weaponChoices.computeIfAbsent(target.uuid(), id -> new HyperionPolicy())
+                .thunder(entry == null ? null : entry.nametag().currentHp());
+        if (kind == null) return -1; // No initial HP: finish the wands, then wait without guessing a weapon.
+        // Use the existing configured/manual or auto-detected slots, validating each enchantment independently.
+        int desired = HyperionAccess.slot(player, kind);
+        if (desired >= 0) return desired;
+        int fallback = kind == HyperionPolicy.Kind.CHIMERA
+                ? HyperionAccess.slot(player, HyperionPolicy.Kind.ULTIMATE_WISE) : -1;
+        if (!missingItemReported) {
+            missingItemReported = true;
+            player.sendSystemMessage(Component.literal("[FuschenAddons] " + (fallback >= 0
+                    ? "Chimera Hyperion missing; continuing with Ultimate Wise."
+                    : "Required Hyperion missing; Thunder attacks paused until it returns.")));
+        }
+        return fallback;
+    }
 
-    @Override
-    public boolean select(ThunderSequence.Item item) {
+    @Override public boolean select(ThunderSequence.Item item) {
         if (item == ThunderSequence.Item.HYPERION) {
-            int slot = HyperionAccess.find(player, hyperionKind());
+            int slot = hyperionSlot();
             if (slot < 0) return false;
             player.getInventory().setSelectedSlot(slot); return true;
         }
         for (int slot = 0; slot < 9; slot++) {
             if (matches(player.getInventory().getItem(slot), item)) {
-                player.getInventory().setSelectedSlot(slot);
-                return true;
+                player.getInventory().setSelectedSlot(slot); return true;
             }
         }
         return false;
     }
-
-    @Override
-    public boolean use(ThunderSequence.Item item) {
+    @Override public boolean use(ThunderSequence.Item item) {
         if (item == ThunderSequence.Item.HYPERION) {
-            int slot = HyperionAccess.find(player, hyperionKind());
+            int slot = hyperionSlot();
             if (slot < 0) return false;
             if (player.getInventory().getSelectedSlot() != slot) {
                 player.getInventory().setSelectedSlot(slot);
-                return true; // Next scheduled use (four ticks later) uses the newly selected item.
+                return true; // Synchronize the new slot before the next scheduled four-tick use.
             }
         }
         if (!matches(player.getMainHandItem(), item) || client.gameMode == null) return false;
-        // Synchronize the selected slot before using the selected item.
         client.gameMode.useItem(player, InteractionHand.MAIN_HAND);
         return true;
     }
-
-    @Override
-    public boolean hasLivingThunder() { return !encounter.isEmpty(); }
-
-    private HyperionPolicy.Kind hyperionKind() {
-        java.util.List<Double> health = new java.util.ArrayList<>();
-        for (UUID id : encounter) {
-            var entry = tracker.get(id);
-            health.add(entry == null ? null : entry.nametag().currentHp());
-        }
-        return HyperionPolicy.thunder(health);
-    }
-
-    @Override
-    public boolean hasThunderInAttackRange() {
-        for (UUID id : encounter) {
-            SeaCreatureMemory.Entry entry = tracker.get(id);
-            Entity entity = entry == null ? null : tracker.entity(entry);
-            if (entity instanceof ElderGuardian && ThunderSequence.inAttackRange(entity.distanceToSqr(player))) return true;
-        }
-        return false;
-    }
-
     static boolean matches(ItemStack stack, ThunderSequence.Item item) {
+        if (item == ThunderSequence.Item.HYPERION) return HyperionAccess.hyperion(stack);
         if (stack.isEmpty()) return false;
-        String search = switch (item) {
-            case ICE_SPRAY -> "ice spray wand";
-            case INK_WAND -> "ink wand";
-            case HYPERION -> "hyperion";
-        };
-        return stack.getHoverName().getString().replaceAll("(?i)§[0-9A-FK-OR]", "")
-                .toLowerCase(Locale.ROOT).contains(search);
+        String search = item == ThunderSequence.Item.ICE_SPRAY ? "ice spray wand" : "ink wand";
+        return PetMenus.plain(stack.getHoverName().getString()).toLowerCase(Locale.ROOT).contains(search);
     }
 }
