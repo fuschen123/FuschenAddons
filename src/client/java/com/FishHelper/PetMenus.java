@@ -27,7 +27,7 @@ public final class PetMenus {
         return plain(text).matches("(?i)(?:\\(\\d+/\\d+\\)\\s*)?Pets(?:\\s*\\(\\d+/\\d+\\))?");
     }
     static AbstractContainerScreen<?> screen(Minecraft client) {
-        return client.player != null && client.screen instanceof AbstractContainerScreen<?> screen
+        return client.player != null && ClientCompat.screen(client) instanceof AbstractContainerScreen<?> screen
                 && title(screen.getTitle().getString()) && screen.getMenu() == client.player.containerMenu
                 && screen.getMenu().slots.size() >= 54 ? screen : null;
     }
@@ -136,7 +136,7 @@ public final class PetMenus {
     static PetSwapSequence.Controls controls(Minecraft client) {
         return new PetSwapSequence.Controls() {
             public PetSwapSequence.Menu menu() {
-                return screen(client) != null ? PetSwapSequence.Menu.PETS : client.screen == null
+                return screen(client) != null ? PetSwapSequence.Menu.PETS : ClientCompat.screen(client) == null
                         ? PetSwapSequence.Menu.NONE : PetSwapSequence.Menu.OTHER;
             }
             public boolean hookReady() { return OwnedHookResolver.find(client, client.player) != null; }

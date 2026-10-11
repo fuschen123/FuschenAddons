@@ -14,16 +14,21 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 /** Optional dev-client integration harness. Never included by the normal build. */
 public class SmokeClient implements ClientModInitializer {
+    @SuppressWarnings("unchecked")
+    static <T extends net.minecraft.world.entity.Entity> net.minecraft.world.entity.EntityType<T> type(String name) {
+        return (net.minecraft.world.entity.EntityType<T>) net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
+            .getValue(net.minecraft.resources.Identifier.withDefaultNamespace(name));
+    }
     Object mod(String name) throws Exception {Field f=FishHelperClient.class.getDeclaredField(name); f.setAccessible(true); return f.get(null);}
     void mod(String name,Object value) throws Exception {Field f=FishHelperClient.class.getDeclaredField(name); f.setAccessible(true); f.set(null,value);}
     void tick(Minecraft c,int count) {for(int i=0;i<count;i++) FishHelperClient.tick(c);}
     void toggle(Minecraft c) {
-        net.minecraft.client.KeyMapping.click(com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM.getOrCreate(Config.INSTANCE.toggleKeyCode)); FishHelperClient.tick(c);
+        net.minecraft.client.KeyMapping.click(com.mojang.blaze3d.platform.InputConstants.getKey(ModBindings.get("toggle").saveString())); FishHelperClient.tick(c);
     }
     static class TestHook extends net.minecraft.world.entity.projectile.FishingHook {
         boolean water;
         net.minecraft.world.entity.Entity attached;
-        TestHook(Minecraft c,int id) {super(net.minecraft.world.entity.EntityType.FISHING_BOBBER,c.level); setId(id); setOwner(c.player); setPos(c.player.position()); c.level.addEntity(this);}
+        TestHook(Minecraft c,int id) {super(SmokeClient.type("fishing_bobber"),c.level); setId(id); setOwner(c.player); setPos(c.player.position()); c.level.addEntity(this);}
         @Override public boolean isInWater() {return water;}
         @Override public net.minecraft.world.entity.Entity getHookedIn() {return attached;}
     }
@@ -50,10 +55,10 @@ public class SmokeClient implements ClientModInitializer {
         var live=new TestHook(c,2_000_010); p.fishing=old; OwnedHookResolver.tick(c);
         check(p.fishing==live && OwnedHookResolver.find(c,p)==live,"current world hook replaces stale pointer");
         c.level.removeEntity(live.getId(),net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
-        var foreign=new net.minecraft.world.entity.projectile.FishingHook(net.minecraft.world.entity.EntityType.FISHING_BOBBER,c.level);
+        var foreign=new net.minecraft.world.entity.projectile.FishingHook(SmokeClient.type("fishing_bobber"),c.level);
         foreign.setId(2_000_020); c.level.addEntity(foreign); check(OwnedHookResolver.find(c,p)==null,"unowned hook ignored"); c.level.removeEntity(foreign.getId(),net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
 
-        inv.setItem(3,net.minecraft.world.item.ItemStack.EMPTY); c.setScreen(null);
+        inv.setItem(3,net.minecraft.world.item.ItemStack.EMPTY); ClientCompat.setScreen(c, null);
         toggle(c); check((boolean)mod("enabled"),"manual enable"); tick(c,160);
         check((boolean)mod("enabled") && mod("hookRecovery")==null && mod("lastProblem").equals("rod"),"missing rod waits enabled without recovery spam");
         inv.setItem(3,rod); tick(c,99); check(mod("hookRecovery")==null,"watchdog does not fire before five seconds");
@@ -63,7 +68,7 @@ public class SmokeClient implements ClientModInitializer {
         var waiting=new TestHook(c,2_000_030); waiting.water=true;
         toggle(c); tick(c,500); check((boolean)mod("enabled") && mod("hookRecovery")==null,"ordinary bite wait exempt"); toggle(c);
         waiting.water=false;
-        var countdown=new net.minecraft.world.entity.decoration.ArmorStand(net.minecraft.world.entity.EntityType.ARMOR_STAND,c.level);
+        var countdown=new net.minecraft.world.entity.decoration.ArmorStand(SmokeClient.type("armor_stand"),c.level);
         countdown.setId(2_000_031); countdown.setPos(waiting.position()); countdown.setCustomName(net.minecraft.network.chat.Component.literal("5s")); c.level.addEntity(countdown);
         Config.INSTANCE.reelInUsingPing=false; Config.INSTANCE.slugfishReelEnabled=false;
         toggle(c); tick(c,250); check(mod("hookRecovery")==null,"valid countdown exempt"); toggle(c);
@@ -77,14 +82,14 @@ public class SmokeClient implements ClientModInitializer {
         check((boolean)mod("enabled") && mod("hookRecovery")!=null,"stuck pet/action phase times out into recovery"); toggle(c);
         toggle(c); mod("hoppityAwaitingYes",true); mod("hoppityPauseTicks",200); tick(c,200);
         check((boolean)mod("enabled") && !(boolean)mod("hoppityAwaitingYes") && mod("hookRecovery")==null,"Hoppity wait bounded and resumes");
-        c.setScreen(new HudEditorScreen(null)); tick(c,200); check(mod("hookRecovery")==null && (boolean)mod("enabled"),"menu freezes automation without disabling");
-        c.setScreen(null); tick(c,100); check(mod("hookRecovery")!=null,"automatic continuation after menu"); toggle(c);
+        ClientCompat.setScreen(c, new HudEditorScreen(null)); tick(c,200); check(mod("hookRecovery")==null && (boolean)mod("enabled"),"menu freezes automation without disabling");
+        ClientCompat.setScreen(c, null); tick(c,100); check(mod("hookRecovery")!=null,"automatic continuation after menu"); toggle(c);
         toggle(c); mod("observedWorldLevel",null); tick(c,1); check(!(boolean)mod("enabled") && mod("hookRecovery")==null && mod("normalRod")==null,"world change disables and clears state");
         tick(c,180); check(!(boolean)mod("enabled"),"world-disabled helper cannot reactivate");
 
-        var guardian=new net.minecraft.world.entity.monster.ElderGuardian(net.minecraft.world.entity.EntityType.ELDER_GUARDIAN,c.level);
+        var guardian=new net.minecraft.world.entity.monster.ElderGuardian(SmokeClient.type("elder_guardian"),c.level);
         guardian.setId(2_000_040); guardian.setPos(p.position().add(4,0,0)); c.level.addEntity(guardian);
-        var label=new net.minecraft.world.entity.decoration.ArmorStand(net.minecraft.world.entity.EntityType.ARMOR_STAND,c.level);
+        var label=new net.minecraft.world.entity.decoration.ArmorStand(SmokeClient.type("armor_stand"),c.level);
         label.setId(2_000_041); label.setPos(guardian.position()); label.setCustomName(net.minecraft.network.chat.Component.literal("[Lv400] Thunder 10M/35M❤")); c.level.addEntity(label);
         SeaCreatureTracker.INSTANCE.reset(); SeaCreatureTracker.INSTANCE.tick(c);
         check(SeaCreatureTracker.INSTANCE.get(guardian.getUUID())!=null && SeaCreatureTracker.INSTANCE.get(label.getUUID())==null,"Thunder maps to actual guardian, not stand");
@@ -100,33 +105,34 @@ public class SmokeClient implements ClientModInitializer {
     ConfigScreen screen;
     HudEditorScreen editor;
     CommandDispatcher<FabricClientCommandSource> commands = new CommandDispatcher<>();
-    static MouseButtonEvent mouse(double x, double y) { return new MouseButtonEvent(x,y,new MouseButtonInfo(0,0)); }
-    static KeyEvent key(int code) { return new KeyEvent(code,0,0); }
+    static MouseButtonEvent mouse(double x, double y) { return new MouseButtonEvent(x,y,new MouseButtonInfo(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT,0)); }
+    static KeyEvent key(int code) { return new KeyEvent(ClientCompat.legacyKeyCode(code),0,0); }
     static Object field(Object obj,String name) throws Exception { Field f=obj.getClass().getDeclaredField(name); f.setAccessible(true); return f.get(obj); }
     static void value(Object obj,String name,Object value) throws Exception { Field f=obj.getClass().getDeclaredField(name); f.setAccessible(true); f.set(obj,value); }
-    void command(String input) throws Exception { commands.execute(input,null); Minecraft.getInstance().setScreen(null); Method drain=net.minecraft.util.thread.BlockableEventLoop.class.getDeclaredMethod("runAllTasks"); drain.setAccessible(true); drain.invoke(Minecraft.getInstance()); }
+    void command(String input) throws Exception { commands.execute(input,null); ClientCompat.setScreen(Minecraft.getInstance(), null); Method drain=net.minecraft.util.thread.BlockableEventLoop.class.getDeclaredMethod("runAllTasks"); drain.setAccessible(true); drain.invoke(Minecraft.getInstance()); }
     void rebuild() throws Exception { Method m=ConfigScreen.class.getDeclaredMethod("rebuild"); m.setAccessible(true); m.invoke(screen); }
     void click(String prefix) {
         Button b=screen.children().stream().filter(e->e instanceof Button v && v.getMessage().getString().startsWith(prefix)).map(e->(Button)e).findFirst().orElseThrow(()->new AssertionError("Button missing: "+prefix));
         screen.mouseClicked(mouse(b.getX()+8,b.getY()+8),false); screen.mouseReleased(mouse(b.getX()+8,b.getY()+8));
     }
     void check(boolean passed,String message) { if(!passed) throw new AssertionError(message); }
-    void screenshot(String name) { Minecraft c=Minecraft.getInstance(); Screenshot.grab(new File("../build/smoke-captures"),name,c.getMainRenderTarget(),1,m->System.out.println("SMOKE_SCREENSHOT: "+m.getString())); }
+    void screenshot(String name) { SmokeCompat.screenshot(Minecraft.getInstance(), name); }
     public void onInitializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(client->{ try {
             client.options.pauseOnLostFocus = false;
-            if (client.screen instanceof net.minecraft.client.gui.screens.PauseScreen) client.setScreen(null);
+            if (ClientCompat.screen(client) instanceof net.minecraft.client.gui.screens.PauseScreen) ClientCompat.setScreen(client, null);
             if(++ticks>5000) throw new AssertionError("Smoke timeout");
-            if(client.getOverlay()!=null || ticks<100 || ticks%40!=0) return;
+            if(SmokeCompat.overlay(client) || ticks<100 || ticks%40!=0) return;
             switch(step++) {
                 case 0 -> {
                     // Deterministic dev-only config, including after an interrupted previous run.
                     Config.INSTANCE=new Config();
-                    ModBindings.bind("toggle",com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM.getOrCreate(Config.INSTANCE.toggleKeyCode));
+                    ModBindings.bind("toggle",com.mojang.blaze3d.platform.InputConstants.getKey("key.keyboard.o"));
                     ModBindings.saveBindings();
+                    InputCompatibilitySmokeChecks.run(this, client);
                     FishHelperClient.registerCommands(commands);
                     client.options.guiScale().set(1); client.resizeGui();
-                    command("fa"); check(client.screen instanceof ConfigScreen,"/fa"); screen=(ConfigScreen)client.screen;
+                    command("fa"); check(ClientCompat.screen(client) instanceof ConfigScreen,"/fa"); screen=(ConfigScreen)ClientCompat.screen(client);
                     Config.INSTANCE.actionWeapon=Config.ActionWeapon.HYPERION; Config.INSTANCE.flareTier=Config.FlareTier.SOS; Config.INSTANCE.petNumber=1;
                     rebuild(); click("Hyperion"); check(field(screen,"dropdown")!=null,"open dropdown");
                 }
@@ -139,15 +145,15 @@ public class SmokeClient implements ClientModInitializer {
                     click("SOS Flare"); screen.keyPressed(key(268)); screen.keyPressed(key(264)); screen.keyPressed(key(257));
                     check(Config.INSTANCE.flareTier==Config.FlareTier.WARNING,"keyboard selection");
                     click("Warning Flare"); screen.keyPressed(key(256)); check(field(screen,"dropdown")==null,"Escape closes popup");
-                    click("Soul Whip"); screen.mouseClicked(mouse(1,1),false); check(field(screen,"dropdown")==null && client.screen==screen,"outside closes only popup");
+                    click("Soul Whip"); screen.mouseClicked(mouse(1,1),false); check(field(screen,"dropdown")==null && ClientCompat.screen(client)==screen,"outside closes only popup");
                     client.options.guiScale().set(2); client.resizeGui(); value(screen,"scroll",4); rebuild(); click("Choose pet");
                 }
                 case 2 -> {
                     screenshot("dropdown-pet-compact.png");
-                    check(client.screen instanceof PetSelectionScreen,"Cascade pet catalog opened");
+                    check(ClientCompat.screen(client) instanceof PetSelectionScreen,"Cascade pet catalog opened");
                     Config.load(); check(Config.INSTANCE.actionWeapon==Config.ActionWeapon.SOUL_WHIP && Config.INSTANCE.flareTier==Config.FlareTier.WARNING,"dropdown persistence");
-                    command("fuschen"); check(client.screen instanceof ConfigScreen,"/fuschen");
-                    command("fa gui"); check(client.screen instanceof HudEditorScreen,"/fa gui"); editor=(HudEditorScreen)client.screen;
+                    command("fuschen"); check(ClientCompat.screen(client) instanceof ConfigScreen,"/fuschen");
+                    command("fa gui"); check(ClientCompat.screen(client) instanceof HudEditorScreen,"/fa gui"); editor=(HudEditorScreen)ClientCompat.screen(client);
                     Config.INSTANCE.healthbarX=.5; Config.INSTANCE.healthbarY=.12;
                 }
                 case 3 -> {
@@ -160,13 +166,13 @@ public class SmokeClient implements ClientModInitializer {
                 }
                 case 4 -> {
                     screenshot("hud-dragged-compact.png"); editor.onClose(); command("fuschen gui");
-                    check(client.screen instanceof HudEditorScreen,"/fuschen gui"); client.options.guiScale().set(1); client.resizeGui();
+                    check(ClientCompat.screen(client) instanceof HudEditorScreen,"/fuschen gui"); client.options.guiScale().set(1); client.resizeGui();
                 }
-                case 5 -> { screenshot("hud-resized.png"); command("fa"); screen=(ConfigScreen)client.screen; click("General"); }
+                case 5 -> { screenshot("hud-resized.png"); command("fa"); screen=(ConfigScreen)ClientCompat.screen(client); click("General"); }
                 case 6 -> {
-                    screenshot("general-healthbar.png"); click("Edit HUD"); check(client.screen instanceof HudEditorScreen,"HUD config button");
+                    screenshot("general-healthbar.png"); click("Edit HUD"); check(ClientCompat.screen(client) instanceof HudEditorScreen,"HUD config button");
                     System.out.println("SMOKE_UI_OK: dropdowns, commands, HUD and config persistence");
-                    command("fa"); screen=(ConfigScreen)client.screen; Config.INSTANCE.thunderMuterEnabled=false; click("Thunder"); click("OFF");
+                    command("fa"); screen=(ConfigScreen)ClientCompat.screen(client); Config.INSTANCE.thunderMuterEnabled=false; click("Thunder"); click("OFF");
                     check(Config.INSTANCE.thunderMuterEnabled,"Thunder Muter toggle"); Config.load(); check(Config.INSTANCE.thunderMuterEnabled,"Thunder Muter persistence");
                 }
                 case 7 -> {
@@ -174,7 +180,7 @@ public class SmokeClient implements ClientModInitializer {
                     net.minecraft.client.gui.screens.worldselection.CreateWorldScreen.openFresh(client,()->client.stop());
                 }
                 case 8 -> {
-                    if(!(client.screen instanceof net.minecraft.client.gui.screens.worldselection.CreateWorldScreen create)) {step--; return;}
+                    if(!(ClientCompat.screen(client) instanceof net.minecraft.client.gui.screens.worldselection.CreateWorldScreen create)) {step--; return;}
                     var state=create.getUiState(); state.setName("Fuschen QA "+System.currentTimeMillis());
                     state.setGameMode(net.minecraft.client.gui.screens.worldselection.WorldCreationUiState.SelectedGameMode.CREATIVE);
                     state.setAllowCommands(true); state.setDifficulty(net.minecraft.world.Difficulty.PEACEFUL); state.setSeed("42");
@@ -182,7 +188,7 @@ public class SmokeClient implements ClientModInitializer {
                     Method onCreate=create.getClass().getDeclaredMethod("onCreate"); onCreate.setAccessible(true); onCreate.invoke(create);
                 }
                 case 9 -> {
-                    if(client.level==null || client.player==null || client.screen!=null) {step--; return;}
+                    if(client.level==null || client.player==null || ClientCompat.screen(client)!=null) {step--; return;}
                     runtimeChecks(client);
                     PetGridSmokeChecks.prepare(this, client);
                 }
@@ -190,7 +196,7 @@ public class SmokeClient implements ClientModInitializer {
                     screenshot("pet-catalog.png");
                     PetGridSmokeChecks.verify(this, client);
                     Config.INSTANCE.twoHyperions=true;Config.INSTANCE.autoDetectHyperions=true;
-                    command("fa");screen=(ConfigScreen)client.screen;value(screen,"scroll",7);rebuild();
+                    command("fa");screen=(ConfigScreen)ClientCompat.screen(client);value(screen,"scroll",7);rebuild();
                 }
                 case 11 -> {
                     screenshot("hyperion-detection.png");
@@ -208,7 +214,7 @@ public class SmokeClient implements ClientModInitializer {
                 case 13 -> {
                     screenshot("jawbus-shuriken-warning.png");
                     ShurikenSmokeChecks.finishPreview(client);
-                    command("fa");screen=(ConfigScreen)client.screen;value(screen,"scroll",5);rebuild();
+                    command("fa");screen=(ConfigScreen)ClientCompat.screen(client);value(screen,"scroll",5);rebuild();
                 }
                 case 14 -> {
                     screenshot("english-rod-wrapping.png");
@@ -224,7 +230,7 @@ public class SmokeClient implements ClientModInitializer {
                 }
                 case 16 -> {
                     screenshot("english-thunder-wrapping.png");
-                    java.nio.file.Files.writeString(java.nio.file.Path.of("../build/smoke-result.txt"), "PASS");
+                    java.nio.file.Files.writeString(java.nio.file.Path.of(System.getProperty("fuschen.smoke.output"), "result.txt"), "PASS");
                     System.out.println("SMOKE_RUNTIME_OK: real client rod slots/offhand, stale hook reconciliation, watchdog, legitimate waits, temporary actions, manual off and world disable");
                     client.stop();
                 }

@@ -1,4 +1,5 @@
 package com.FishHelper
+import com.mojang.blaze3d.platform.InputConstants
 
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
@@ -26,7 +27,7 @@ class HudEditorScreen(private val parent: Screen?) : Screen(Component.literal("F
         val pos = SeaCreatureHud.position()
         val x = pos.pixelX(width, w)
         val y = pos.pixelY(height, SeaCreatureHud.HEIGHT)
-        if (event.button() == 0 && event.x() >= x && event.x() < x + w && event.y() >= y && event.y() < y + SeaCreatureHud.HEIGHT) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && event.x() >= x && event.x() < x + w && event.y() >= y && event.y() < y + SeaCreatureHud.HEIGHT) {
             moving = true; grabX = event.x() - x; grabY = event.y() - y
             return true
         }
@@ -34,7 +35,7 @@ class HudEditorScreen(private val parent: Screen?) : Screen(Component.literal("F
     }
 
     override fun mouseDragged(event: MouseButtonEvent, deltaX: Double, deltaY: Double): Boolean {
-        if (moving && event.button() == 0) {
+        if (moving && event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             val pos = HudPosition.fromPixels(event.x() - grabX, event.y() - grabY, width, height, SeaCreatureHud.barWidth(width), SeaCreatureHud.HEIGHT)
             Config.INSTANCE.healthbarX = pos.x(); Config.INSTANCE.healthbarY = pos.y()
             return true
@@ -43,11 +44,11 @@ class HudEditorScreen(private val parent: Screen?) : Screen(Component.literal("F
     }
 
     override fun mouseReleased(event: MouseButtonEvent): Boolean {
-        if (moving && event.button() == 0) { moving = false; Config.save(); return true }
+        if (moving && event.button() == InputConstants.MOUSE_BUTTON_LEFT) { moving = false; Config.save(); return true }
         return super.mouseReleased(event)
     }
 
     override fun removed() { Config.save(); moving = false }
-    override fun onClose() { Config.save(); minecraft.setScreen(parent) }
+    override fun onClose() { Config.save(); ClientCompat.setScreen(minecraft, parent) }
     override fun isPauseScreen() = false
 }

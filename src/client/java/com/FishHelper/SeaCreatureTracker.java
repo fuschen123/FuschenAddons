@@ -8,8 +8,6 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.monster.ElderGuardian;
-import net.minecraft.world.entity.monster.Slime;
-import net.minecraft.world.entity.monster.MagmaCube;
 import net.minecraft.world.entity.animal.golem.IronGolem;
 import net.minecraft.world.entity.player.Player;
 import java.util.*;
@@ -53,7 +51,7 @@ final class SeaCreatureTracker {
             if (!encounter && ticks % 5 != 1) continue;
             Entity mob = world.getEntity(entity.getId() - SeaCreatureNametag.entityOffset(tag.name()));
             if (encounter) mob = encounterMob(entity, mob, tag.name());
-            if (tag.name().equals("Jawbus Follower") && mob instanceof Slime && !(mob instanceof MagmaCube))
+            if (tag.name().equals("Jawbus Follower") && ClientCompat.isPlainSlime(mob))
                 mob = world.getEntity(entity.getId() - 11);
             if (!(mob instanceof LivingEntity || mob instanceof Display.ItemDisplay) || mob instanceof ArmorStand) continue;
             if (mob instanceof Player && (mob.getUUID().version() == 4 || mob.getUUID().version() == 1)) continue;

@@ -21,7 +21,7 @@ object SeaCreatureHud {
     @JvmStatic fun initialize() {
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, Identifier.fromNamespaceAndPath("tsclient", "sea_creature_health")) { graphics, _ ->
             val client = Minecraft.getInstance()
-            if (Config.INSTANCE.seaCreatureHealthbarEnabled && !client.options.hideGui && client.screen !is HudEditorScreen) {
+            if (Config.INSTANCE.seaCreatureHealthbarEnabled && !ClientCompat.hideGui(client) && ClientCompat.screen(client) !is HudEditorScreen) {
                 SeaCreatureTracker.INSTANCE.hudTarget(client)?.let { entry ->
                     val hp = if (SeaCreatureTracker.INSTANCE.entity(entry) == null) entry.nametag().unknownHealth() else entry.nametag()
                     draw(graphics, client.window.guiScaledWidth, client.window.guiScaledHeight, hp, false, false)

@@ -22,7 +22,7 @@ final class MovementSmokeChecks {
                 var pos=new BlockPos(x+dx,y+dy,z+dz);blocks.put(pos,c.level.getBlockState(pos));
                 c.level.setBlock(pos,(dy==-1?Blocks.STONE:Blocks.AIR).defaultBlockState(),3);
             }
-            c.player.setPos(x+.5,y,z+.5);c.player.setOnGround(true);c.setScreen(null);
+            c.player.setPos(x+.5,y,z+.5);c.player.setOnGround(true);ClientCompat.setScreen(c, null);
             Config.INSTANCE.randomMovementEnabled=true;RandomMovementFeature.reset(c);active.set(null,true);
             tick.invoke(null,c);t.check(!(boolean)owned.get(null),"no center holds no movement keys");
             t.commands.execute("fa movement center",null);t.check(center.get(null).equals(c.player.position()),"fa movement command sets center");

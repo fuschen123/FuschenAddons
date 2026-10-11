@@ -135,6 +135,6 @@ class PetSelectionScreen(private val parent: Screen?) : Screen(Component.literal
         }
     }
 
-    override fun onClose() { minecraft.setScreen(parent) }
+    override fun onClose() { ClientCompat.setScreen(minecraft, parent) }
     override fun isPauseScreen() = false
 }

@@ -13,9 +13,9 @@ final class ShurikenSmokeChecks {
     private record Mob(IronGolem entity, ArmorStand tag) { }
     private static Mob preview;
     private static Mob create(Minecraft c, int id, double distance, String name) {
-        var mob = new IronGolem(EntityType.IRON_GOLEM, c.level); mob.setId(id);
+        var mob = new IronGolem(SmokeClient.type("iron_golem"), c.level); mob.setId(id);
         mob.setPos(c.player.position().add(distance, 0, 0)); c.level.addEntity(mob);
-        var tag = new ArmorStand(EntityType.ARMOR_STAND, c.level); tag.setId(id + 1); tag.setPos(mob.position());
+        var tag = new ArmorStand(SmokeClient.type("armor_stand"), c.level); tag.setId(id + 1); tag.setPos(mob.position());
         tag.setCustomName(Component.literal(name)); c.level.addEntity(tag);
         return new Mob(mob, tag);
     }
@@ -70,7 +70,7 @@ final class ShurikenSmokeChecks {
         }
     }
     static void preparePreview(SmokeClient t, Minecraft c) {
-        c.setScreen(null); preview = create(c, 2_400_050, 8, BASE); t.tick(c, 12);
+        ClientCompat.setScreen(c, null); preview = create(c, 2_400_050, 8, BASE); t.tick(c, 12);
         t.check(visible(c), "warning visible for real HUD screenshot");
     }
     static void finishPreview(Minecraft c) {

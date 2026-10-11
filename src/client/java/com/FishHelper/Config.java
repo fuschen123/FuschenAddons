@@ -20,7 +20,7 @@ public class Config {
     public static Config INSTANCE = new Config();
 
     /** GLFW key code for the start/stop toggle (default O). */
-    public int toggleKeyCode = InputConstants.KEY_O;
+    public int toggleKeyCode = 79; // Legacy GLFW O; new bindings use stable names.
     public String toggleBinding;
     public String configBinding;
     public String movementBinding;

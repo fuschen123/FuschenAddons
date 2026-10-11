@@ -1,35 +1,25 @@
-# Automatically build the project and run any configured tests for every push
-# and submitted pull request. This can help catch issues that only occur on
-# certain platforms or Java versions, and provides a first line of defence
-# against bad commits.
-
 name: build
 on: [pull_request, push]
 
 jobs:
   build:
+    name: Minecraft ${{ matrix.minecraft }}
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        minecraft: ['26.1.2', '26.2', '26.3']
     steps:
-      - name: checkout repository
-        uses: actions/checkout@v6
-      - name: validate gradle wrapper
-        uses: gradle/actions/wrapper-validation@v6
-      - name: setup jdk
-        uses: actions/setup-java@v5
+      - uses: actions/checkout@v6
+      - uses: gradle/actions/wrapper-validation@v6
+      - uses: actions/setup-java@v5
         with:
           java-version: '25'
           distribution: 'microsoft'
-      - name: make gradle wrapper executable
-        run: chmod +x ./gradlew
-      - name: build
-        run: ./gradlew build
-      - name: upload mod jar
-        uses: actions/upload-artifact@v7
+      - run: chmod +x ./gradlew
+      - run: ./gradlew -Pminecraft_version=${{ matrix.minecraft }} clean build
+      - uses: actions/upload-artifact@v7
         with:
-          path: build/libs/FuschenAddons_v0.0.60.jar
-          archive: false
-      - name: upload sources jar
-        uses: actions/upload-artifact@v7
-        with:
-          path: build/libs/FuschenAddons_v0.0.60-sources.jar
-          archive: false
+          name: FuschenAddons-mc${{ matrix.minecraft }}
+          path: build/${{ matrix.minecraft }}/libs/*.jar
+          if-no-files-found: error

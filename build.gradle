@@ -1,102 +1,64 @@
 plugins {
-	id 'net.fabricmc.fabric-loom' version "${loom_version}"
-	id 'org.jetbrains.kotlin.jvm' version '2.4.10'
-	id 'maven-publish'
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'org.jetbrains.kotlin.jvm' version '2.4.10'
+    id 'maven-publish'
 }
 
-repositories {
-	maven { url = 'https://maven.starred.foo/releases' }
-	// Add repositories to retrieve artifacts from in here.
-	// You should only use this when depending on other mods because
-	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
-	// for more information about repositories.
-}
+// All variants compile the same feature sources. Only proven API differences belong in compat/.
+def targets = [
+    '26.1.2': [api: '0.155.3+26.1.2', cascade: '2026.09.7+26.1'],
+    '26.2': [api: '0.161.0+26.2', cascade: '2026.09.7+26.2'],
+    '26.3': [api: '0.162.0+26.3', cascade: '2026.09.7+26.3']
+]
+def minecraftVersion = providers.gradleProperty('minecraft_version').get()
+def target = targets[minecraftVersion]
+if (target == null) throw new GradleException("Unsupported Minecraft target: ${minecraftVersion}; choose ${targets.keySet()}")
+layout.buildDirectory = layout.projectDirectory.dir("build/${minecraftVersion}")
+base.archivesName = "FuschenAddons-${version}-mc${minecraftVersion}"
+
+repositories { maven { url = 'https://maven.starred.foo/releases' } }
 
 loom {
-	splitEnvironmentSourceSets()
-
-	mods {
-		"tsclient" {
-			sourceSet sourceSets.main
-			sourceSet sourceSets.client
-		}
-	}
+    splitEnvironmentSourceSets()
+    mods {
+        tsclient { sourceSet sourceSets.main; sourceSet sourceSets.client }
+    }
+    runs { client { runDir "run/${minecraftVersion}" } }
 }
+sourceSets.client.java.srcDir("src/compat/${minecraftVersion}/java")
+sourceSets.client.kotlin.srcDir("src/compat/${minecraftVersion}/kotlin")
 
 dependencies {
-	implementation include("foo.starred:cascade:2026.09.7+26.1")
-	// Required at runtime, but installed separately to keep the mod JAR small.
-	implementation "net.fabricmc:fabric-language-kotlin:1.13.13+kotlin.2.4.10"
-	testImplementation platform('org.junit:junit-bom:5.11.4')
-	testImplementation 'org.junit.jupiter:junit-jupiter'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-	// To change the versions see the gradle.properties file
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-	// Fabric API. This is technically optional, but you probably want it anyway.
-	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    // Minecraft 26.x is published unobfuscated; no Yarn or external mapping layer is needed.
+    minecraft "com.mojang:minecraft:${minecraftVersion}"
+    implementation "net.fabricmc:fabric-loader:${loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${target.api}"
+    implementation include("foo.starred:cascade:${target.cascade}")
+    implementation "net.fabricmc:fabric-language-kotlin:${fabric_kotlin_version}"
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 kotlin { jvmToolchain(25) }
 test { useJUnitPlatform() }
-
 processResources {
-	def version = project.version
-	inputs.property "version", version
-
-	filesMatching("fabric.mod.json") {
-		expand "version": version
-	}
+    def metadata = [version: project.version, minecraftVersion: minecraftVersion,
+                    loaderVersion: loader_version, fabricApiVersion: target.api,
+                    fabricKotlinVersion: fabric_kotlin_version]
+    inputs.properties(metadata)
+    filesMatching('fabric.mod.json') { expand metadata }
 }
-
-tasks.withType(JavaCompile).configureEach {
-	it.options.release = 25
-}
-
-// The project name already includes the mod version, so omit Gradle's default
-// second version suffix from generated JAR filenames.
-tasks.withType(AbstractArchiveTask).configureEach {
-	archiveVersion.set("")
-}
-
+tasks.withType(JavaCompile).configureEach { options.release = 25 }
+tasks.withType(AbstractArchiveTask).configureEach { archiveVersion.set('') }
 java {
-	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-	// if it is present.
-	// If you remove this line, sources will not be generated.
-	withSourcesJar()
-
-	sourceCompatibility = JavaVersion.VERSION_25
-	targetCompatibility = JavaVersion.VERSION_25
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
-
 jar {
-	def projectName = project.name
-	inputs.property "projectName", projectName
-
-	from("LICENSE") {
-		rename { "${it}_$projectName"}
-	}
-	from("THIRD_PARTY_NOTICES.md")
+    from('LICENSE') { rename { "${it}_FuschenAddons" } }
+    from('THIRD_PARTY_NOTICES.md')
 }
-
 tasks.named('sourcesJar') { from('LICENSE', 'THIRD_PARTY_NOTICES.md') }
-
-// configure the maven publication
-publishing {
-	publications {
-		create("mavenJava", MavenPublication) {
-			from components.java
-		}
-	}
-
-	// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-	repositories {
-		// Add repositories to publish to here.
-		// Notice: This block does NOT have the same function as the block in the top level.
-		// The repositories here will be used for publishing your artifact, not for
-		// retrieving dependencies.
-	}
-}
-
+publishing { publications { mavenJava(MavenPublication) { from components.java } } }

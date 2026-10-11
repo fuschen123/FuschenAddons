@@ -6,6 +6,7 @@ import groovy.json.JsonOutput
 allprojects {
     afterEvaluate {
         sourceSets.client.java.srcDir(file('src/smoke/java'))
+        sourceSets.client.java.srcDir(file("src/smoke/compat/${providers.gradleProperty('minecraft_version').get()}/java"))
         tasks.named('processResources') {
             inputs.property('smokeClient', true)
             doLast {
@@ -15,11 +16,14 @@ allprojects {
                 metadata.text = JsonOutput.toJson(json)
             }
         }
-        def result = file('build/smoke-result.txt')
+        def smokeDir = layout.buildDirectory.dir('smoke').get().asFile
+        def result = new File(smokeDir, 'result.txt')
         tasks.named('runClient') {
+            jvmArgs "-Dfuschen.smoke.output=${smokeDir.absolutePath}"
             doFirst {
+                smokeDir.mkdirs()
                 result.text = 'RUNNING'
-                file('build/smoke-captures/screenshots').mkdirs()
+                new File(smokeDir, 'screenshots').mkdirs()
             }
             doLast {
                 if (!result.isFile() || result.text.trim() != 'PASS') {
@@ -27,7 +31,7 @@ allprojects {
                 }
                 ['dropdown-weapon', 'dropdown-pet-compact', 'hud-preview-compact',
                  'hud-dragged-compact', 'hud-resized', 'general-healthbar', 'thunder-muter'].each { name ->
-                    if (!file("build/smoke-captures/screenshots/${name}.png").isFile()) {
+                    if (!new File(smokeDir, "screenshots/${name}.png").isFile()) {
                         throw new GradleException("Missing smoke screenshot: ${name}")
                     }
                 }

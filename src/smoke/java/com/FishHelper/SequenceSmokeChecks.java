@@ -16,7 +16,6 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.monster.MagmaCube;
 import net.minecraft.world.entity.monster.ElderGuardian;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.player.Player;
@@ -55,7 +54,7 @@ final class SequenceSmokeChecks {
     }
     static ChestMenu pets(Minecraft c,String title) {
         var menu=ChestMenu.sixRows(170,c.player.getInventory(),new SimpleContainer(54));
-        c.player.containerMenu=menu;c.setScreen(new ContainerScreen(menu,c.player.getInventory(),Component.literal(title)));return menu;
+        c.player.containerMenu=menu;ClientCompat.setScreen(c, new ContainerScreen(menu,c.player.getInventory(),Component.literal(title)));return menu;
     }
     static void ticks(SmokeClient t,Minecraft c,Inputs input,int count){for(int i=0;i<count;i++){input.now++;t.tick(c,1);}}
     static void remove(Minecraft c,Entity e){c.level.removeEntity(e.getId(),Entity.RemovalReason.DISCARDED);}
@@ -71,7 +70,7 @@ final class SequenceSmokeChecks {
         var inv=c.player.getInventory();
         try {
             for(int i=0;i<9;i++)inv.setItem(i,ItemStack.EMPTY);
-            inv.setItem(3,new ItemStack(Items.FISHING_ROD));inv.setSelectedSlot(8);c.setScreen(null);
+            inv.setItem(3,new ItemStack(Items.FISHING_ROD));inv.setSelectedSlot(8);ClientCompat.setScreen(c, null);
             var hook=new SmokeClient.TestHook(c,2_200_000);hook.water=true;
             t.toggle(c);ticks(t,c,input,250);
             t.check(inv.getSelectedSlot()==8 && input.uses.isEmpty(),"auto-rod OFF respects manual slot during idle fishing");
@@ -88,7 +87,7 @@ final class SequenceSmokeChecks {
             t.check(HyperionAccess.find(c.player,HyperionPolicy.Kind.ULTIMATE_WISE)<0,"changed hotbar invalidates the pair");inv.setItem(1,chimera);
             HyperionDetectionSmokeChecks.run(t,c);
 
-            var mob=new MagmaCube(EntityType.MAGMA_CUBE,c.level);mob.setId(2_200_010);mob.setPos(c.player.position());c.level.addEntity(mob);hook.attached=mob;
+            var mob=SmokeCompat.magma(c);mob.setId(2_200_010);mob.setPos(c.player.position());c.level.addEntity(mob);hook.attached=mob;
             input.uses.clear();input.now=0;t.toggle(c); // recognition creates the sequence; no use on this tick
             ticks(t,c,input,4);t.check(input.uses.isEmpty(),"hook Hyperion has a four-tick delay");ticks(t,c,input,1);
             t.check(input.uses.size()==1 && input.uses.getFirst().equals("5:1:Hyperion"),"fifth tick uses Chimera exactly once");
@@ -107,10 +106,10 @@ final class SequenceSmokeChecks {
             ticks(t,c,input,19);t.check(input.clicks.size()==1,"no retry before twenty ticks");ticks(t,c,input,1);
             t.check(input.clicks.equals(List.of(10,20)),"retry resolves moved pet rather than stale slot");
             menu.slots.get(20).set(PetGridSmokeChecks.favorite(pet(a,true),"★"));ticks(t,c,input,1);
-            t.check(input.clicks.size()==2 && c.screen==null && (int)t.mod("fishingAction")==-1,"active favorite confirms swap without despawn");
+            t.check(input.clicks.size()==2 && ClientCompat.screen(c)==null && (int)t.mod("fishingAction")==-1,"active favorite confirms swap without despawn");
             t.check(Config.INSTANCE.petPages.size()==1 && Config.INSTANCE.petPageCount==2,"only observed pages cached");
             t.mod("fishingAction",6);menu=pets(c,"Bank");menu.slots.get(10).set(pet(a,false));ticks(t,c,input,50);
-            t.check(input.clicks.size()==2 && c.screen!=null,"foreign menu never clicked or closed");c.player.closeContainer();
+            t.check(input.clicks.size()==2 && ClientCompat.screen(c)!=null,"foreign menu never clicked or closed");c.player.closeContainer();
             Config.INSTANCE.petSwapEnabled=false;t.mod("fishingAction",5);ticks(t,c,input,50);
             t.check((int)t.mod("fishingAction")==-1 && input.clicks.size()==2,"disabled pet swap does not click");t.toggle(c);
 
@@ -122,7 +121,7 @@ final class SequenceSmokeChecks {
             t.check(inv.getSelectedSlot()==5 && input.uses.isEmpty(),"flare selects before use");ticks(t,c,input,2);t.check(input.uses.isEmpty(),"flare respects swap delay");
             ticks(t,c,input,1);t.check(input.uses.size()==1,"flare use after delay");ticks(t,c,input,3);
             t.check(inv.getSelectedSlot()==8 && t.mod("flare")==null,"flare restores original manual slot without recast");
-            var stand=new ArmorStand(EntityType.ARMOR_STAND,c.level);stand.setId(2_200_020);stand.setPos(c.player.position());c.level.addEntity(stand);
+            var stand=new ArmorStand(SmokeClient.type("armor_stand"),c.level);stand.setId(2_200_020);stand.setPos(c.player.position());c.level.addEntity(stand);
             stand.setCustomName(Component.literal("Warning Flare 100s"));t.check(!FlareFeature.nearby(c,2),"lower flare does not satisfy Alert");
             stand.setCustomName(Component.literal("Plasmaflux Power Orb 60s"));t.check(!FlareFeature.nearby(c,1),"Plasmaflux never counts");
             stand.setCustomName(Component.literal("SOS Flare 100s"));t.check(FlareFeature.nearby(c,2),"higher flare satisfies Alert");
@@ -137,8 +136,8 @@ final class SequenceSmokeChecks {
             int before=input.uses.size();ticks(t,c,input,200);t.check(input.uses.size()==before,"existing flare prevents placement");
             t.toggle(c);remove(c,stand);Config.INSTANCE.flareTier=Config.FlareTier.NONE;
 
-            var thunder=new ElderGuardian(EntityType.ELDER_GUARDIAN,c.level);thunder.setId(2_200_030);thunder.setPos(c.player.position().add(3,0,0));c.level.addEntity(thunder);
-            var label=new ArmorStand(EntityType.ARMOR_STAND,c.level);label.setId(2_200_031);label.setPos(thunder.position());
+            var thunder=new ElderGuardian(SmokeClient.type("elder_guardian"),c.level);thunder.setId(2_200_030);thunder.setPos(c.player.position().add(3,0,0));c.level.addEntity(thunder);
+            var label=new ArmorStand(SmokeClient.type("armor_stand"),c.level);label.setId(2_200_031);label.setPos(thunder.position());
             label.setCustomName(Component.literal("[Lv400] Thunder 35M/35M❤"));c.level.addEntity(label);
             SeaCreatureTracker.INSTANCE.reset();SeaCreatureTracker.INSTANCE.tick(c);Config.INSTANCE.thunderResponseEnabled=true;
             inv.setItem(6,named("Ice Spray Wand"));inv.setItem(7,named("Ink Wand"));inv.setSelectedSlot(8);
@@ -164,10 +163,10 @@ final class SequenceSmokeChecks {
             t.check(c.player.getYRot()==yaw && c.player.getXRot()==pitch && inv.getSelectedSlot()==8,"cancel restores slot but never view");
             remove(c,thunder);remove(c,label);remove(c,hook);
 
-            c.setScreen(new ConfigScreen(null,ModBindings.get("toggle")));var screen=(ConfigScreen)c.screen;t.screen=screen;t.click("General");
+            ClientCompat.setScreen(c, new ConfigScreen(null,ModBindings.get("toggle")));var screen=(ConfigScreen)ClientCompat.screen(c);t.screen=screen;t.click("General");
             String old=ModBindings.get("toggle").saveString();clickExact(screen,ModBindings.get("toggle").getTranslatedKeyMessage().getString());
             t.check(ModBindings.get("toggle").saveString().equals(old),"starting capture click is not assigned");
-            var mouse=new MouseButtonEvent(20,20,new MouseButtonInfo(4,0));screen.mouseClicked(mouse,false);screen.mouseReleased(mouse);
+            var mouse=new MouseButtonEvent(20,20,new MouseButtonInfo(InputConstants.getKey("key.mouse.5").getValue(),0));screen.mouseClicked(mouse,false);screen.mouseReleased(mouse);
             t.check(ModBindings.get("toggle").saveString().equals("key.mouse.5"),"side mouse button assigned using vanilla key type: " + ModBindings.get("toggle").saveString() + ", listener=" + SmokeClient.field(screen,"listeningForKey") + ", target=" + SmokeClient.field(screen,"bindingId"));
             Config.load();t.check(Config.INSTANCE.toggleBinding.equals("key.mouse.5"),"mouse binding persisted");
             clickExact(screen,ModBindings.get("toggle").getTranslatedKeyMessage().getString());screen.keyPressed(SmokeClient.key(256));
@@ -176,13 +175,13 @@ final class SequenceSmokeChecks {
             Config.load();t.check(Config.INSTANCE.toggleBinding.equals("key.keyboard.r"),"keyboard binding persisted after mouse replacement");
             String configKey=ModBindings.get("config").saveString(),movementKey=ModBindings.get("movement").saveString();
             clickExact(screen,ModBindings.get("config").getTranslatedKeyMessage().getString());
-            mouse=new MouseButtonEvent(20,20,new MouseButtonInfo(3,0));screen.mouseClicked(mouse,false);screen.mouseReleased(mouse);
+            mouse=new MouseButtonEvent(20,20,new MouseButtonInfo(InputConstants.getKey("key.mouse.4").getValue(),0));screen.mouseClicked(mouse,false);screen.mouseReleased(mouse);
             clickExact(screen,ModBindings.get("movement").getTranslatedKeyMessage().getString());
-            mouse=new MouseButtonEvent(20,20,new MouseButtonInfo(5,0));screen.mouseClicked(mouse,false);screen.mouseReleased(mouse);
+            mouse=new MouseButtonEvent(20,20,new MouseButtonInfo(InputConstants.getKey("key.mouse.6").getValue(),0));screen.mouseClicked(mouse,false);screen.mouseReleased(mouse);
             Config.load();t.check(Config.INSTANCE.configBinding.equals("key.mouse.4") && Config.INSTANCE.movementBinding.equals("key.mouse.6"),"all mod bindings support mouse and persistence");
             ModBindings.bind("config",InputConstants.getKey(configKey));ModBindings.bind("movement",InputConstants.getKey(movementKey));
             t.check(!(boolean)t.mod("enabled"),"binding does not toggle fishing");
-            c.setScreen(null);RandomMovementFeature.setCenter(c);
+            ClientCompat.setScreen(c, null);RandomMovementFeature.setCenter(c);
             var type=RandomMovementFeature.class;var center=type.getDeclaredField("center");center.setAccessible(true);
             t.check(center.get(null).equals(c.player.position()),"movement center uses actual current position");
             RandomMovementFeature.reset(c);t.check(center.get(null)==null,"world reset discards movement center");
@@ -190,8 +189,8 @@ final class SequenceSmokeChecks {
             System.out.println("SMOKE_SEQUENCES_OK: pet UUID/retry/active/foreign-menu, auto-rod, hook fifth tick, Hyperion validation/6M/no rotation, periodic delayed flares, mouse/keyboard persistence, movement center");
         } finally {
             if((boolean)t.mod("enabled"))t.mod("enabled",false);
-            c.setScreen(null);c.player.containerMenu=c.player.inventoryMenu;c.gameMode=originalGameMode;Config.INSTANCE=originalConfig;
-            ModBindings.bind("toggle",InputConstants.Type.KEYSYM.getOrCreate(originalConfig.toggleKeyCode));Config.save();
+            ClientCompat.setScreen(c, null);c.player.containerMenu=c.player.inventoryMenu;c.gameMode=originalGameMode;Config.INSTANCE=originalConfig;
+            ModBindings.bind("toggle",ClientCompat.keyboardType().getOrCreate(ClientCompat.legacyKeyCode(originalConfig.toggleKeyCode)));Config.save();
         }
     }
 }
