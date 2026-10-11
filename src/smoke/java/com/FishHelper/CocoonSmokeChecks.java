@@ -16,10 +16,10 @@ import java.util.*;
 final class CocoonSmokeChecks {
     record Mob(LivingEntity mob, ArmorStand tag) { }
     private static Mob create(Minecraft c, int id, String name, String hp, double distance, int tagOffset) {
-        LivingEntity mob = name.equals("Thunder") ? new ElderGuardian(EntityType.ELDER_GUARDIAN,c.level)
-                : new IronGolem(EntityType.IRON_GOLEM,c.level);
+        LivingEntity mob = name.equals("Thunder") ? new ElderGuardian(SmokeClient.type("elder_guardian"),c.level)
+                : new IronGolem(SmokeClient.type("iron_golem"),c.level);
         mob.setId(id); mob.setPos(c.player.position().add(distance,0,0)); c.level.addEntity(mob);
-        var tag = new ArmorStand(EntityType.ARMOR_STAND,c.level); tag.setId(id+tagOffset); tag.setPos(mob.position().add(0,2,0));
+        var tag = new ArmorStand(SmokeClient.type("armor_stand"),c.level); tag.setId(id+tagOffset); tag.setPos(mob.position().add(0,2,0));
         tag.setCustomName(Component.literal("[Lv600] " + name + " " + hp + "/100M❤")); c.level.addEntity(tag);
         return new Mob(mob,tag);
     }
@@ -40,7 +40,7 @@ final class CocoonSmokeChecks {
         Config.INSTANCE.ultimateWiseSlot=1; Config.INSTANCE.chimeraSlot=2;
         var inv=c.player.getInventory(); List<Mob> fixtures=new ArrayList<>();
         try {
-            c.setScreen(null); for(int i=0;i<9;i++) inv.setItem(i,ItemStack.EMPTY);
+            ClientCompat.setScreen(c, null); for(int i=0;i<9;i++) inv.setItem(i,ItemStack.EMPTY);
             inv.setItem(0,SequenceSmokeChecks.hyperion("ultimate_wise")); inv.setItem(1,SequenceSmokeChecks.hyperion("ultimate_chimera"));
             inv.setItem(3,new ItemStack(Items.FISHING_ROD)); inv.setItem(6,SequenceSmokeChecks.named("Ice Spray Wand"));
             inv.setItem(7,SequenceSmokeChecks.named("Ink Wand")); inv.setItem(8,SequenceSmokeChecks.named("Thunder Cocoon"));
@@ -95,10 +95,10 @@ final class CocoonSmokeChecks {
             t.check(inv.getSelectedSlot()==1 && input.uses.size()>before,"returned Chimera resumes same sequence");
             first.mob().setHealth(0); t.tick(c,35);
             t.check(paused(t) && inv.getSelectedSlot()==1 && uses(input,0,"Ice Spray Wand")==2,"second low target gets its own wand sequence and directly uses Chimera");
-            c.setScreen(new HudEditorScreen(null)); second.mob().setHealth(0); t.tick(c,1);
+            ClientCompat.setScreen(c, new HudEditorScreen(null)); second.mob().setHealth(0); t.tick(c,1);
             t.check(!paused(t) && (boolean)t.mod("enabled"),"last death ends pause without disabling helper");
             before=input.uses.size(); t.tick(c,150); t.check(input.uses.size()==before && t.mod("hookRecovery")==null,"open menu still blocks post-fight fishing");
-            c.setScreen(null); t.tick(c,99); t.check(t.mod("hookRecovery")==null,"failsafe timer starts fresh after menu closes");
+            ClientCompat.setScreen(c, null); t.tick(c,99); t.check(t.mod("hookRecovery")==null,"failsafe timer starts fresh after menu closes");
             t.tick(c,1); t.check(t.mod("hookRecovery")!=null,"automatic fishing resumes after all encounters and pauses"); t.toggle(c);
             remove(c,first); remove(c,second); fixtures.clear();
 
@@ -129,7 +129,7 @@ final class CocoonSmokeChecks {
         } finally {
             if ((boolean)t.mod("enabled")) t.toggle(c);
             for (Mob mob:fixtures) remove(c,mob);
-            c.setScreen(null); c.gameMode=oldMode; Config.INSTANCE=oldConfig; Config.save(); SeaCreatureTracker.INSTANCE.reset();
+            ClientCompat.setScreen(c, null); c.gameMode=oldMode; Config.INSTANCE=oldConfig; Config.save(); SeaCreatureTracker.INSTANCE.reset();
         }
     }
 }

@@ -56,7 +56,7 @@ final class ThunderResponseFeature implements ThunderSequence.Controls {
         var entry = SeaCreatureTracker.INSTANCE.get(target.uuid());
         weaponChoices.computeIfAbsent(target.uuid(), id -> new HyperionPolicy())
                 .thunder(entry == null ? null : entry.nametag().currentHp());
-        if (allowInput && client.screen == null) sequence.tick(this);
+        if (allowInput && ClientCompat.screen(client) == null) sequence.tick(this);
         return encounter.active();
     }
     boolean aborted() { return sequence.aborted(); }

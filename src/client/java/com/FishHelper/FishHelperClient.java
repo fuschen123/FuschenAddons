@@ -104,15 +104,15 @@ public class FishHelperClient implements ClientModInitializer {
         TOGGLE_KEY = KeyMappingHelper.registerKeyMapping(
                 new KeyMapping(
                         "key.tsclient.toggle",
-                        InputConstants.Type.KEYSYM,
-                        Config.INSTANCE.toggleKeyCode,
+                        ClientCompat.keyboardType(),
+                        ClientCompat.legacyKeyCode(Config.INSTANCE.toggleKeyCode),
                         KeyCategories.MAIN
                 )
         );
         CONFIG_KEY = KeyMappingHelper.registerKeyMapping(
                 new KeyMapping(
                         "key.tsclient.config",
-                        InputConstants.Type.KEYSYM,
+                        ClientCompat.keyboardType(),
                         InputConstants.KEY_P,
                         KeyCategories.MAIN
                 )
@@ -168,7 +168,7 @@ public class FishHelperClient implements ClientModInitializer {
                 } else if (hoppityAwaitingYes && isHoppityYesPrompt(plainMessage)) {
                     String yesCommand = findClickableCommand(message, "[Yes]");
                     if (yesCommand != null) {
-                        hoppityScreenBeforeAccept = client.screen;
+                        hoppityScreenBeforeAccept = ClientCompat.screen(client);
                         sendChatClickCommand(client.player, yesCommand);
                         hoppityAwaitingYes = false;
                         hoppityAwaitingWindow = true;
@@ -295,8 +295,8 @@ public class FishHelperClient implements ClientModInitializer {
             }
 
             if (hoppityAwaitingWindow
-                    && client.screen != hoppityScreenBeforeAccept
-                    && client.screen instanceof AbstractContainerScreen<?> screen
+                    && ClientCompat.screen(client) != hoppityScreenBeforeAccept
+                    && ClientCompat.screen(client) instanceof AbstractContainerScreen<?> screen
                     && isHoppityOfferScreen(screen, client)) {
                 hoppityAwaitingWindow = false;
                 hoppityWindowDetected = true;
@@ -312,7 +312,7 @@ public class FishHelperClient implements ClientModInitializer {
 
                     if (Config.INSTANCE.autoBuyHoppityRabbit && validOffer) {
                         if (alreadyOwned) {
-                            client.setScreen(null);
+                            ClientCompat.setScreen(client, null);
                         } else if (client.gameMode != null) {
                             client.gameMode.handleContainerInput(
                                     screen.getMenu().containerId,
@@ -329,7 +329,7 @@ public class FishHelperClient implements ClientModInitializer {
             }
 
             if (hoppityWindowDetected) {
-                if (client.screen instanceof AbstractContainerScreen<?>) {
+                if (ClientCompat.screen(client) instanceof AbstractContainerScreen<?>) {
                     return;
                 }
                 hoppityWindowDetected = false;
@@ -354,7 +354,7 @@ public class FishHelperClient implements ClientModInitializer {
             }
 
             FishingHook interruptHook = findOwnedBobber(client, client.player);
-            if ((flare != null || fishingAction >= 0) && (client.screen == null || PetMenus.screen(client) != null)
+            if ((flare != null || fishingAction >= 0) && (ClientCompat.screen(client) == null || PetMenus.screen(client) != null)
                     && HookRecoveryFeature.isBlockingMob(interruptHook, client.player)) {
                 finishFlare();
                 if (PetMenus.screen(client) != null) client.player.closeContainer();
@@ -372,16 +372,16 @@ public class FishHelperClient implements ClientModInitializer {
                 if (ownedPetMenu && petSwap != null) client.player.closeContainer();
                 finishFishingAction(); ownedPetMenu = false;
             }
-            if (client.screen != null && Config.INSTANCE.closeMenuWhenReeling
+            if (ClientCompat.screen(client) != null && Config.INSTANCE.closeMenuWhenReeling
                     && shouldCloseMenuForReel(client, client.player)) {
-                client.setScreen(null);
+                ClientCompat.setScreen(client, null);
                 if (ownedPetMenu) {
                     // Stop the pet-menu wait so the pending reel can run immediately.
                     finishFishingAction();
                     ownedPetMenu = false;
                 }
             }
-            if (client.screen != null && !ownedPetMenu) {
+            if (ClientCompat.screen(client) != null && !ownedPetMenu) {
                 if (fishingAction == 5 || fishingAction == 6) finishFishingAction();
                 return;
             }
@@ -391,7 +391,7 @@ public class FishHelperClient implements ClientModInitializer {
                     petPhase ? Config.INSTANCE.petCommandDelayTicks + 620 : 100)) {
                 restoreActionRod(client.player);
                 if (hotspotRadarStage > 0) restoreHotspotRadarSlot(client.player);
-                if (ownedPetMenu) client.setScreen(null);
+                if (ownedPetMenu) ClientCompat.setScreen(client, null);
                 finishFishingAction();
                 ACTION_DEADLINE.reset();
                 reportProblem(client.player, "action-timeout", "Action timed out; recovering the fishing rod automatically");
@@ -400,7 +400,7 @@ public class FishHelperClient implements ClientModInitializer {
             }
 
             // Do not let a timed-out call action cause fishing inputs while its offer menu is open.
-            if (hoppityWindowDetected && client.screen instanceof AbstractContainerScreen<?>) {
+            if (hoppityWindowDetected && ClientCompat.screen(client) instanceof AbstractContainerScreen<?>) {
                 return;
             }
             hoppityWindowDetected = false;
@@ -446,7 +446,7 @@ public class FishHelperClient implements ClientModInitializer {
                 reportProblem(player, "rod", "Waiting for a fishing rod in the hotbar or offhand");
                 return;
             }
-            if (client.screen == null && fishingAction < 0 && HookRecoveryFeature.isBlockingMob(activeBobber, player)) {
+            if (ClientCompat.screen(client) == null && fishingAction < 0 && HookRecoveryFeature.isBlockingMob(activeBobber, player)) {
                 Entity hookedMob = activeBobber.getHookedIn();
                 boolean newMobEncounter = hookedMob != null
                         && !HOOK_ENCOUNTERS.wasUsed(activeBobber.getUUID(), hookedMob.getUUID())
@@ -516,7 +516,7 @@ public class FishHelperClient implements ClientModInitializer {
                     rodSelectedSlotForAction = player.getInventory().getSelectedSlot();
                     if (activeBobber != null && activeBobber.getUUID().equals(actionHook) && !HOOK_ENCOUNTERS.wasReeled(actionHook)) {
                         client.gameMode.useItem(player, rodHandForAction);
-                        player.swing(rodHandForAction);
+                        ClientCompat.swing(player, rodHandForAction, false);
                         HOOK_ENCOUNTERS.reeled(actionHook);
                     }
 
@@ -644,10 +644,10 @@ public class FishHelperClient implements ClientModInitializer {
         if (JAWBUS_PAUSE.active() || thunderResponse != null || client.player == null || client.level == null
                 || client.gameMode == null || !client.player.isAlive()) return;
         // Only close the pet screen owned by the interrupted fishing sequence.
-        if (client.screen != null) {
+        if (ClientCompat.screen(client) != null) {
             if ((fishingAction == 5 || fishingAction == 6)
-                    && client.screen instanceof AbstractContainerScreen<?> screen
-                    && isPetsMenu(screen.getTitle().getString())) client.setScreen(null);
+                    && ClientCompat.screen(client) instanceof AbstractContainerScreen<?> screen
+                    && isPetsMenu(screen.getTitle().getString())) ClientCompat.setScreen(client, null);
             else return;
         }
         finishHookRecovery(); // Restores the rod slot before Thunder takes its snapshot.
@@ -700,7 +700,7 @@ public class FishHelperClient implements ClientModInitializer {
     }
 
     private static void beginRecast(Minecraft client, UUID hook, UUID mob, boolean attack, boolean pet) {
-        if (!enabled || JAWBUS_PAUSE.active() || THUNDER_PAUSE.active() || hookRecovery != null || thunderResponse != null || client.player == null || client.screen != null) return;
+        if (!enabled || JAWBUS_PAUSE.active() || THUNDER_PAUSE.active() || hookRecovery != null || thunderResponse != null || client.player == null || ClientCompat.screen(client) != null) return;
         finishRareCreature(client.player);
         if (attack) recoveryAttemptMob = mob;
         hookRecovery = new HookRecoveryFeature(client, hook, mob, rodSelectedSlotForAction, rodHandForAction, attack, HOOK_ENCOUNTERS);
@@ -1024,12 +1024,12 @@ public class FishHelperClient implements ClientModInitializer {
 
     private static void openConfigMenu() {
         Minecraft client = Minecraft.getInstance();
-        client.setScreen(new ConfigScreen(client.screen, TOGGLE_KEY));
+        ClientCompat.setScreen(client, new ConfigScreen(ClientCompat.screen(client), TOGGLE_KEY));
     }
 
     private static void openHudEditor() {
         Minecraft client = Minecraft.getInstance();
-        client.setScreen(new HudEditorScreen(client.screen));
+        ClientCompat.setScreen(client, new HudEditorScreen(ClientCompat.screen(client)));
     }
 
     private static void stopForWorldChange(LocalPlayer player) {
@@ -1073,8 +1073,8 @@ public class FishHelperClient implements ClientModInitializer {
     private static void beginThunderPause(Minecraft client) {
         RandomMovementFeature.suspend(client);
         if ((fishingAction == 5 || fishingAction == 6)
-                && client.screen instanceof AbstractContainerScreen<?> screen
-                && isPetsMenu(screen.getTitle().getString())) client.setScreen(null);
+                && ClientCompat.screen(client) instanceof AbstractContainerScreen<?> screen
+                && isPetsMenu(screen.getTitle().getString())) ClientCompat.setScreen(client, null);
         resetFishingActions(client.player, true);
         client.player.sendSystemMessage(Component.literal(STATUS_PREFIX + " §eThunder nearby; fishing paused"));
     }

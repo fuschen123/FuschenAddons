@@ -1,4 +1,5 @@
 package com.FishHelper.features;
+import com.FishHelper.ClientCompat;
 
 import com.FishHelper.Config;
 import com.FishHelper.KeyCategories;
@@ -14,7 +15,6 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -40,8 +40,8 @@ public final class RandomMovementFeature {
     public static void initialize() {
         toggleKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.tsclient.random_movement",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_K,
+                ClientCompat.keyboardType(),
+                InputConstants.KEY_K,
                 KeyCategories.MAIN
         ));
         ModBindings.register("movement", toggleKey);
@@ -64,7 +64,7 @@ public final class RandomMovementFeature {
         if (centerWorld != null && (centerWorld != client.level || centerConnection != client.getConnection())) reset(client);
         while (toggleKey.consumeClick()) {
             // Avoid toggling the macro from a GUI/keybind menu.
-            if (Config.INSTANCE.randomMovementEnabled && client.screen == null
+            if (Config.INSTANCE.randomMovementEnabled && ClientCompat.screen(client) == null
                     && client.player != null) {
                 active = !active;
                 if (active) {
@@ -101,7 +101,7 @@ public final class RandomMovementFeature {
         }
 
         // Any open screen (inventory, chat, pause menu, or another GUI) suspends movement.
-        if (client.screen != null || FishHelperClient.movementPaused() || !client.player.isAlive()) {
+        if (ClientCompat.screen(client) != null || FishHelperClient.movementPaused() || !client.player.isAlive()) {
             releaseMovementKeys(client);
             return;
         }
@@ -171,10 +171,7 @@ public final class RandomMovementFeature {
         }
 
         InputConstants.Key key = InputConstants.getKey(mapping.saveString());
-        boolean physicallyDown = switch (key.getType()) {
-            case KEYSYM, SCANCODE -> InputConstants.isKeyDown(client.getWindow(), key.getValue());
-            case MOUSE -> GLFW.glfwGetMouseButton(client.getWindow().handle(), key.getValue()) == GLFW.GLFW_PRESS;
-        };
+        boolean physicallyDown = ClientCompat.physicallyDown(client, key);
         mapping.setDown(physicallyDown);
     }
 

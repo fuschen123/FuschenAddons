@@ -20,7 +20,7 @@ Inspected source:
 Adapted files: `ThunderSoundFilter.java`, `ThunderMuter.java` and
 `mixin/ThunderSoundMixin.java`. Changes: isolated and testable sound/timestamp state;
 the central FuschenAddons tracker supplies actual living Thunder; a dedicated
-persisted option; Minecraft 26.1.2 sound bindings; world/server reset and explicit
+persisted option; Minecraft 26.1.2/26.2/26.3 sound bindings; world/server reset and explicit
 first-match state; host suffix validation for the SkyBlock gate. The original
 `lightning_bolt`/`guardian` substring matching and 65-second tail are retained.
 No other cleaner features or FishyAddons runtime dependencies are included.
@@ -34,7 +34,7 @@ withdraw those original permissions or the other third-party licenses below.
 
 ## Cascade UI (BSD 3-Clause)
 
-Cascade `2026.09.7+26.1` is bundled as a nested JAR. Copyright (c) 2025, Starred.
+Cascade `2026.09.7+26.1`, `2026.09.7+26.2` or `2026.09.7+26.3` is bundled as a nested JAR matching the Minecraft target. Copyright (c) 2025, Starred.
 Source: https://github.com/skies-starred/cascade
 Its full BSD 3-Clause license is also included at
 `src/main/resources/licenses/Cascade-BSD-3-Clause.txt` (under `licenses/` in the binary).
@@ -69,7 +69,7 @@ Adapted files: `SeaCreatureNametag.java`, `SeaCreatureTracker.java`,
 `feesh-sea-creatures.txt`, and the original Feesh nametag fixtures in
 `SeaCreatureRecognitionTest.java`.
 
-Changes: Java port targeting Minecraft 26.1.2; exact catalog filtering; validated
+Changes: Java port targeting Minecraft 26.1.2, 26.2 and 26.3; exact catalog filtering; validated
 real-entity association; deduplication by UUID; world-local memory and a 40-tick
 gap allowance; explicit unknown/partial HP instead of zero as an unknown sentinel;
 no invented max HP; shared Thunder/HUD consumers. The single-target HUD selection

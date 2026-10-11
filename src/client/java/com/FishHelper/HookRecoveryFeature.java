@@ -40,7 +40,7 @@ final class HookRecoveryFeature implements HookRecoverySequence.Controls {
     }
     boolean canContinue() {
         return client.player == player && client.level == world && player.isAlive()
-                && client.gameMode != null && client.screen == null;
+                && client.gameMode != null && ClientCompat.screen(client) == null;
     }
     boolean tick() { sequence.tick(this); return sequence.active(); }
     boolean aborted() { return sequence.aborted(); }
@@ -73,13 +73,13 @@ final class HookRecoveryFeature implements HookRecoverySequence.Controls {
     public boolean alreadyReeled(UUID hook) { return guard.wasReeled(hook); }
     public boolean reel(UUID hook) {
         if (!hook.equals(currentHook()) || !rod.held()) return false;
-        client.gameMode.useItem(player, rod.hand()); player.swing(rod.hand());
+        client.gameMode.useItem(player, rod.hand()); ClientCompat.swing(player, rod.hand(), false);
         guard.reeled(hook);
         return true;
     }
     public boolean cast() {
         if (currentHook() != null || !hookReferenceSettled() || !rod.held()) return false;
-        client.gameMode.useItem(player, rod.hand()); player.swing(rod.hand());
+        client.gameMode.useItem(player, rod.hand()); ClientCompat.swing(player, rod.hand(), false);
         castIssued = true;
         return true;
     }

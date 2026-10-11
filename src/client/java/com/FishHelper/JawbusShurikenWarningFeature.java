@@ -47,7 +47,7 @@ final class JawbusShurikenWarningFeature {
     }
 
     private void draw(Minecraft client, GuiGraphicsExtractor graphics) {
-        if (!visible(client) || client.options.hideGui) return;
+        if (!visible(client) || ClientCompat.hideGui(client)) return;
         String text = "No Shuriken!";
         int halfWidth = client.font.width(text) / 2;
         int halfHeight = client.font.lineHeight / 2;

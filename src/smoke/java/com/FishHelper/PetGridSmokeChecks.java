@@ -66,10 +66,10 @@ final class PetGridSmokeChecks {
         t.check(profile != null && profile.partialProfile().properties().get("textures").iterator().next().value().equals(texture), "head texture survives menu capture and config reload");
         t.check(!new PetMenuSlot(10, Config.INSTANCE.selectedPet, "invalid json").icon().isEmpty(), "invalid icon safely uses a fallback head");
         c.player.closeContainer();
-        c.setScreen(new PetSelectionScreen(null));
+        ClientCompat.setScreen(c, new PetSelectionScreen(null));
     }
     static void verify(SmokeClient t, Minecraft c) throws Exception {
-        var screen = (PetSelectionScreen)c.screen;
+        var screen = (PetSelectionScreen)ClientCompat.screen(c);
         Button a = button(screen, "…aaaaaa"), b = button(screen, "…bbbbbb"), dolphin = button(screen, "Dolphin"), squid = button(screen, "Squid");
         t.check(b.getX() - a.getX() == 2 * (a.getWidth() + 4) && b.getY() == a.getY(), "gap retained between duplicate-name heads");
         t.check(dolphin.getX() == a.getX() && dolphin.getY() - a.getY() == a.getWidth() + 4, "next menu row displayed below the first");

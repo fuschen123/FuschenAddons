@@ -15,7 +15,6 @@ import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.network.chat.Component
-import org.lwjgl.glfw.GLFW
 import kotlin.math.max
 import kotlin.math.min
 
@@ -72,7 +71,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                     config.petCommandDelayTicks = it.toInt().coerceIn(0, 200)
                 }
                 rows += Row("Fishing pet", config.selectedPet?.name() ?: "Read your /pets pages, then choose a pet") { x, y, w ->
-                    button(x, y, w, "Choose pet") { minecraft.setScreen(PetSelectionScreen(this)) }
+                    button(x, y, w, "Choose pet") { ClientCompat.setScreen(minecraft, PetSelectionScreen(this)) }
                 }
                 toggle("Auto-Swap to Rod Outside Fishing Sequence", "Automatically selects your rod while idle. Active fishing sequences still restore their required rod.", { config.autoRodSwap }) { config.autoRodSwap = it }
                 number("Flare swap delay", "Client ticks between select / use / restore (default 3 = 150 ms)", { config.flareSwapDelayTicks.toString() }, false) {
@@ -124,7 +123,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                     config.seaCreatureHealthbarEnabled = it
                 }
                 rows += Row("Healthbar position", "Drag the preview to move it · /fa gui") { x, y, w ->
-                    button(x, y, w, "Edit HUD") { minecraft.setScreen(HudEditorScreen(this)) }
+                    button(x, y, w, "Edit HUD") { ClientCompat.setScreen(minecraft, HudEditorScreen(this)) }
                 }
                 binding("Start / stop key", "toggle")
                 binding("Config key", "config")
@@ -224,7 +223,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
         val menu = dropdown
         if (menu != null) {
             val row = dropdownLayout(menu).rowAt(event.x(), event.y())
-            if (event.button() == 0 && row >= 0) selectDropdown(menu.offset + row)
+            if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && row >= 0) selectDropdown(menu.offset + row)
             else dropdown = null
             return true // Closing the popup must not activate a control underneath it.
         }
@@ -292,8 +291,8 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
                 override fun updateMessage() { message = Component.literal("Slot ${(1 + kotlin.math.round(value * 8).toInt()).coerceIn(1, 9)}") }
                 override fun applyValue() { set((1 + kotlin.math.round(value * 8).toInt()).coerceIn(1, 9)); Config.save() }
                 override fun keyPressed(event: KeyEvent): Boolean {
-                    if (event.key() == GLFW.GLFW_KEY_LEFT || event.key() == GLFW.GLFW_KEY_RIGHT) {
-                        value = ((get() + if (event.key() == GLFW.GLFW_KEY_RIGHT) 1 else -1).coerceIn(1, 9) - 1) / 8.0
+                    if (event.key() == InputConstants.KEY_LEFT || event.key() == InputConstants.KEY_RIGHT) {
+                        value = ((get() + if (event.key() == InputConstants.KEY_RIGHT) 1 else -1).coerceIn(1, 9) - 1) / 8.0
                         applyValue(); updateMessage(); return true
                     }
                     return super.keyPressed(event)
@@ -305,20 +304,20 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
     override fun keyPressed(event: KeyEvent): Boolean {
         dropdown?.let { menu ->
             when (event.key()) {
-                GLFW.GLFW_KEY_ESCAPE -> dropdown = null
-                GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> selectDropdown(menu.highlighted)
-                GLFW.GLFW_KEY_UP -> menu.highlighted = max(0, menu.highlighted - 1)
-                GLFW.GLFW_KEY_DOWN -> menu.highlighted = min(menu.labels.lastIndex, menu.highlighted + 1)
-                GLFW.GLFW_KEY_HOME -> menu.highlighted = 0
-                GLFW.GLFW_KEY_END -> menu.highlighted = menu.labels.lastIndex
-                GLFW.GLFW_KEY_TAB -> { dropdown = null; return super.keyPressed(event) }
+                InputConstants.KEY_ESCAPE -> dropdown = null
+                InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER, InputConstants.KEY_SPACE -> selectDropdown(menu.highlighted)
+                InputConstants.KEY_UP -> menu.highlighted = max(0, menu.highlighted - 1)
+                InputConstants.KEY_DOWN -> menu.highlighted = min(menu.labels.lastIndex, menu.highlighted + 1)
+                InputConstants.KEY_HOME -> menu.highlighted = 0
+                InputConstants.KEY_END -> menu.highlighted = menu.labels.lastIndex
+                InputConstants.KEY_TAB -> { dropdown = null; return super.keyPressed(event) }
             }
             revealDropdownSelection()
             return true
         }
         if (listeningForKey) {
             if (event.key() != InputConstants.KEY_ESCAPE) {
-                if (bindingId == "toggle") Config.INSTANCE.toggleKeyCode = event.key()
+                // Named bindings preserve the input across GLFW and SDL versions.
                 ModBindings.bind(bindingId, InputConstants.getKey(event))
             }
             listeningForKey = false
@@ -412,7 +411,7 @@ class ConfigScreen(private val parent: Screen?, private val toggleKey: KeyMappin
         dropdown = null
         listeningForKey = false
         ModBindings.saveBindings()
-        minecraft.setScreen(parent)
+        ClientCompat.setScreen(minecraft, parent)
     }
 
     override fun isPauseScreen() = false

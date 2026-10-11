@@ -6,19 +6,18 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.animal.golem.IronGolem;
 import net.minecraft.world.entity.decoration.ArmorStand;
-import net.minecraft.world.entity.monster.MagmaCube;
 import java.util.UUID;
 
 /** Synthetic local-world fixtures exercise the real input gate, not a parallel test scheduler. */
 final class JawbusSmokeChecks {
     private record Mob(IronGolem entity, ArmorStand label) { }
     private static Mob create(Minecraft client, int id, UUID uuid, double distance) {
-        IronGolem mob = new IronGolem(EntityType.IRON_GOLEM, client.level);
+        IronGolem mob = new IronGolem(SmokeClient.type("iron_golem"), client.level);
         mob.setId(id);
         if (uuid != null) mob.setUUID(uuid);
         mob.setPos(client.player.position().add(distance, 0, 0));
         client.level.addEntity(mob);
-        ArmorStand label = new ArmorStand(EntityType.ARMOR_STAND, client.level);
+        ArmorStand label = new ArmorStand(SmokeClient.type("armor_stand"), client.level);
         label.setId(id + 1); label.setPos(mob.position());
         label.setCustomName(Component.literal("[Lv600] Lord Jawbus 100M/100M❤"));
         client.level.addEntity(label);
@@ -36,7 +35,7 @@ final class JawbusSmokeChecks {
 
     static void run(SmokeClient test, Minecraft client) throws Exception {
         test.check(!(boolean) test.mod("enabled"), "Jawbus fixtures start with manual OFF");
-        client.setScreen(null);
+        ClientCompat.setScreen(client, null);
         test.toggle(client); test.tick(client, 100);
         HookRecoveryFeature cancelled = (HookRecoveryFeature) test.mod("hookRecovery");
         test.check(cancelled != null && !cancelled.castIssued(), "watchdog recast is pending");
@@ -54,7 +53,7 @@ final class JawbusSmokeChecks {
         test.tick(client, 6);
         test.check(SeaCreatureTracker.INSTANCE.get(first.entity().getUUID()) != null, "central recognition maps Jawbus to real mob");
         SmokeClient.TestHook stuck = new SmokeClient.TestHook(client, 2_100_020);
-        MagmaCube hooked = new MagmaCube(EntityType.MAGMA_CUBE, client.level);
+        var hooked = SmokeCompat.magma(client);
         hooked.setId(2_100_030); hooked.setPos(client.player.position()); client.level.addEntity(hooked);
         stuck.attached = hooked;
         test.check(HookRecoveryFeature.isBlockingMob(stuck, client.player), "fixture would trigger normal mob recovery");
@@ -83,7 +82,7 @@ final class JawbusSmokeChecks {
         second = create(client, 2_100_050, survivor, 60); // Same UUID, different runtime ID, already outside acquisition range.
         test.tick(client, 6);
         test.check(paused(test), "returning UUID outside range stays relevant after entity ID changes");
-        client.setScreen(new HudEditorScreen(null));
+        ClientCompat.setScreen(client, new HudEditorScreen(null));
         second.label().setCustomName(Component.literal("[Lv600] Lord Jawbus 0/100M❤"));
         for (int i = 0; i < 6 && paused(test); i++) test.tick(client, 1);
         test.check(!paused(test) && second.entity().isAlive(), "zero-HP nametag confirms death before vanilla entity removal");
@@ -93,7 +92,7 @@ final class JawbusSmokeChecks {
         test.check(test.mod("hookRecovery") == null && (int) test.mod("hoppityPauseTicks") == 1, "Hoppity still blocks continuation");
         test.tick(client, 151);
         test.check(test.mod("hookRecovery") == null && (int) test.mod("fishingAction") == -1, "open menu still blocks continuation");
-        client.setScreen(null); test.tick(client, 99);
+        ClientCompat.setScreen(client, null); test.tick(client, 99);
         test.check(test.mod("hookRecovery") == null, "post-Jawbus failsafe gets a fresh full five-second window");
         test.tick(client, 1);
         test.check(test.mod("hookRecovery") != null, "fishing resumes automatically after all pause reasons end");

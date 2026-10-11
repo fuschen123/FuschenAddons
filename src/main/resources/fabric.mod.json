@@ -13,11 +13,11 @@
     "client": ["com.FishHelper.FishHelperClient"]
   },
   "depends": {
-    "fabricloader": ">=0.19.5",
-    "minecraft": "~26.1.2",
+    "fabricloader": ">=${loaderVersion}",
+    "minecraft": "${minecraftVersion}",
     "java": ">=25",
-    "fabric-api": "*",
+    "fabric-api": ">=${fabricApiVersion}",
     "cascade": ">=2026.9.7",
-    "fabric-language-kotlin": ">=1.13.13+kotlin.2.4.10"
+    "fabric-language-kotlin": ">=${fabricKotlinVersion}"
   }
 }

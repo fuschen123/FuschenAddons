@@ -22,7 +22,7 @@ final class GrinchAutoClickerFeature {
             reset();
             return;
         }
-        if (client.screen != null || player.isUsingItem() || client.gameMode == null) {
+        if (ClientCompat.screen(client) != null || player.isUsingItem() || client.gameMode == null) {
             return;
         }
 
@@ -37,7 +37,7 @@ final class GrinchAutoClickerFeature {
         }
 
         client.gameMode.attack(player, hookedEntity);
-        player.swing(InteractionHand.MAIN_HAND);
+        ClientCompat.swing(player, InteractionHand.MAIN_HAND, true);
 
         double cps = Math.max(3.0, Math.min(15.0, Config.INSTANCE.grinchClickCps));
         double intervalMs = (1000.0 / cps) + ((Math.random() - 0.5) * 60.0);

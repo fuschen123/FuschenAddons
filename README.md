@@ -1,10 +1,25 @@
-# FuschenAddons 0.0.60
+# FuschenAddons 0.0.61
 
-Client-side fishing helper by fuschen. Built for **Minecraft 26.1.2, Java 25,
-Fabric Loader >= 0.19.5 and Fabric API**. Cascade `2026.09.7+26.1` is bundled.
-**Fabric Language Kotlin >= 1.13.13+kotlin.2.4.10 is installed separately.**
-Feesh is not a runtime dependency. The inspected Feesh build targets 26.2;
-this project retains its existing Minecraft 26.1.2 target.
+Client-side fishing helper by fuschen. Three builds share the same feature sources.
+Install the JAR matching your **exact Minecraft version**, with **Java 25**,
+**Fabric Loader >= 0.19.5** and the dependencies below.
+
+| Minecraft | Fabric API (tested) | Cascade (bundled) |
+| --- | --- | --- |
+| 26.1.2 | 0.155.3+26.1.2 | 2026.09.7+26.1 |
+| 26.2 | 0.161.0+26.2 | 2026.09.7+26.2 |
+| 26.3 | 0.162.0+26.3 | 2026.09.7+26.3 |
+
+**Install Fabric API and Fabric Language Kotlin >= 1.13.13+kotlin.2.4.10 separately.**
+The Kotlin compiler/runtime baseline is 2.4.10. Feesh is not a runtime dependency.
+Do not install multiple FuschenAddons variants together. The Cascade version for
+that Minecraft target is already included; no separate Cascade install is needed.
+
+Settings keep their existing file and keys. Named keyboard/mouse bindings are
+portable between GLFW (26.1.2/26.2) and SDL (26.3). Legacy numeric toggle bindings
+are translated for SDL without rewriting the original legacy value. GLFW-only
+F25 or raw scancode bindings unsupported by SDL remain saved but inactive on 26.3
+until explicitly rebound; returning to an older variant retains the original binding.
 
 ## Configuration and HUD
 
@@ -59,7 +74,7 @@ numeric pet-position setting is retained for migration purposes but does not aut
 an automatic click: select a pet once in the new catalog. Clear and reread the catalog
 after changing SkyBlock profiles; the client cannot reliably infer profile identity.
 
-**Auto-Swap zur Angel außerhalb der Fishing-Sequenz** (default ON) controls idle
+**Auto-Swap to Rod Outside Fishing Sequence** (default ON) controls idle
 rod selection. OFF respects the manual slot outside an active catch/recovery; required
 returns within an action still work. Menus and exclusive actions own their input.
 
@@ -281,7 +296,21 @@ hook is left alone. This repairs the state instead of requiring an off/on toggle
 
 ## Development and validation
 
-Run `./gradlew clean build` with Java 25. The unit suite covers Feesh's actual
+Use Java 25 and run each target separately (quote `-P` arguments in PowerShell):
+
+```sh
+./gradlew '-Pminecraft_version=26.1.2' clean build
+./gradlew '-Pminecraft_version=26.2' clean build
+./gradlew '-Pminecraft_version=26.3' clean build
+```
+
+Outputs are `build/<minecraft>/libs/FuschenAddons-0.0.61-mc<minecraft>.jar`.
+The default target is 26.1.2. GitHub Actions builds/tests all three targets.
+Minecraft 26.x is unobfuscated: the build uses the actual target's official
+Minecraft classes, matching Fabric API and Cascade artifacts, without Yarn mappings.
+Feature code stays shared; `src/compat/<minecraft>/java` contains only the small
+GUI, input, entity-class and swing-animation API bridges.
+ The unit suite covers Feesh's actual
 formatted nametag examples, partial/unknown health, identity deduplication and gaps,
 multiple Thunder, radius exit/reentry, 5-CPS timing, missing items, single-shot hook
 recovery, delayed release, retry limits, watchdog exemptions/preemption, the exact
@@ -289,11 +318,11 @@ recovery, delayed release, retry limits, watchdog exemptions/preemption, the exa
 Jawbus tests cover delayed/multiple spawn signals, multiple mobs, radius exit,
 confirmed death, short/long absence, entity-ID replacement and world/reset cleanup.
 
-Run `./gradlew -I smoke.gradle runClient --no-configuration-cache` for the optional
+Run `./gradlew '-Pminecraft_version=26.1.2' -I smoke.gradle runClient --no-configuration-cache` (repeat for 26.2 and 26.3) for the optional
 local dev-client smoke suite. It creates a disposable creative world under ignored
-`run/saves`, writes screenshots to `build/smoke-captures/screenshots` and fails the
-task unless `build/smoke-result.txt` reports success. The harness is excluded from
-normal builds. After a smoke run, use `./gradlew clean build` for distribution.
+`run/<minecraft>/saves`, writes screenshots to `build/<minecraft>/smoke/screenshots` and fails the
+task unless `build/<minecraft>/smoke/result.txt` reports success. The harness is excluded from
+normal builds. After a smoke run, use the corresponding target's `clean build` for distribution. Never distribute a smoke build.
 
 The smoke checks exercise actual mouse/keyboard screen handlers,
 dropdown scrolling and closing, all four registered command paths, config reload,

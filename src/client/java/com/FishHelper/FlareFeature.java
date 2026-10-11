@@ -25,7 +25,7 @@ final class FlareFeature implements FlareSequence.Controls {
         sequence = new FlareSequence(Config.INSTANCE.flareSwapDelayTicks);
     }
     boolean tick() {
-        if (client.player != player || client.level != world || !player.isAlive() || client.screen != null
+        if (client.player != player || client.level != world || !player.isAlive() || ClientCompat.screen(client) != null
                 || Config.INSTANCE.flareTier.ordinal() != required) { finish(); return false; }
         sequence.tick(this); return sequence.active();
     }
